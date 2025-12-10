@@ -102,12 +102,17 @@ def write_config(config):
     update_scheduled_jobs() # Call after writing config
 
 def read_db():
+    print(f"DEBUG(app): Attempting to read DB from {DB_FILE}")
     if not os.path.exists(DB_FILE):
+        print(f"DEBUG(app): {DB_FILE} not found. Returning empty indicators.")
         return {"indicators": {}}
     with open(DB_FILE, "r") as f:
         try:
-            return json.load(f)
+            db_data = json.load(f)
+            print(f"DEBUG(app): DB read successfully. Indicators count: {len(db_data.get('indicators', {}))}")
+            return db_data
         except json.JSONDecodeError:
+            print(f"DEBUG(app): Error decoding JSON from {DB_FILE}. Returning empty indicators.")
             return {"indicators": {}}
 
 def read_stats():
@@ -155,6 +160,7 @@ def index():
     stats = read_stats()
     db_data = read_db() # Read db.json
     unique_ip_count = len(db_data.get("indicators", {})) # Calculate unique IP count
+    print(f"DEBUG(app): Unique IP Count before rendering: {unique_ip_count}")
 
     local_tz = get_localzone() # Get local timezone once
 

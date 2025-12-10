@@ -119,6 +119,14 @@
             {% endfor %}
         </ul>
         <hr>
+        <h2>Feeds Aggregation</h2>
+        <div id="update-section">
+            <p>Click the button below to update all threat intelligence feeds now.</p>
+            <button id="run-button" class="button run">Run All Feeds</button>
+            <div id="loader" class="loader"></div>
+            <div id="status-message" class="status-message" style="display: none;"></div>
+        </div>
+        <hr>
         <h2>IP Statistics</h2>
         <p>Total Unique IPs: {{ unique_ip_count }}</p>
         <hr>

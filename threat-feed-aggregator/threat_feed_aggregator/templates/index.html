@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threat Feed Aggregator</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #f4f6f8; }
+        .navbar { background-color: #fff; border-bottom: 1px solid #ddd; padding: 0.5em 2em; }
+        .container { max-width: 800px; margin: 2em auto; padding: 2em; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        .button { background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+        .button:hover { background-color: #0056b3; }
+        .button:disabled { background-color: #a0a0a0; }
+        .button.run { background-color: #28a745; }
+        .button.run:hover { background-color: #218838; }
+        .button.remove { background-color: #dc3545; font-size: 12px; padding: 5px 10px; }
+        .button.remove:hover { background-color: #c82333; }
+        .form-group { margin-bottom: 1em; display: flex; align-items: center; }
+        .form-group input[name="name"] { width: 150px; }
+        .form-group input[name="url"] { flex-grow: 1; }
+        .form-group select { width: 80px; }
+        .form-group input, .form-group select { margin-right: 10px; }
+        .url-list { list-style: none; padding: 0; }
+        .url-list li { background-color: #f9f9f9; padding: 10px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 8px; cursor: pointer; }
+        .url-list li .url-display { display: flex; justify-content: space-between; align-items: center; }
+        .url-list li .edit-form form { display: flex; align-items: center; width: 100%; }
+        .url-list li .edit-form input[name="name"] { width: 150px; }
+        .url-list li .edit-form input[name="url"] { flex-grow: 1; }
+        .url-list li .edit-form select { width: 80px; }
+        .url-list li .edit-form input, .url-list li .edit-form select { margin-right: 10px; }
+        .url-list li span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; margin-right: 1em; }
+        .url-list li div { display: flex; align-items: center; flex-shrink: 0;}
+        .file-list a { text-decoration: none; color: #007bff; }
+        .file-list a:hover { text-decoration: underline; }
+        .badge { background-color: #6c757d; color: white; padding: 4px 8px; text-align: center; border-radius: 10px; font-size: 12px; }
+        .status-message { padding: 1em; background-color: #e2e3e5; border: 1px solid #d6d8db; border-radius: 5px; margin-top: 1em; text-align: center; }
+        .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #3498db; width: 20px; height: 20px; -webkit-animation: spin 2s linear infinite; animation: spin 2s linear infinite; display: none; margin: 1em auto; }
+        @-webkit-keyframes spin { 0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>Threat Feed Aggregator</h1>
+    </div>
+    <div class="container">
+        <h2>Manage Sources</h2>
+        <form action="/add" method="post" class="form-group">
+            <input type="text" name="name" placeholder="Display Name" required>
+            <input type="text" name="url" placeholder="Enter feed URL" required>
+            <select name="format" onchange="toggleKeyField(this)">
+                <option value="text">Text</option>
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+            </select>
+            <input type="text" name="key_or_column" placeholder="Key or Column" style="display: none;">
+            <button type="submit" class="button">Add URL</button>
+        </form>
+        <ul class="url-list">
+            {% for item in urls %}
+            <li onclick="toggleEdit({{ loop.index0 }})">
+                <div class="url-display">
+                    <span>{{ item.name }}</span>
+                    <div>
+                        <span class="badge">{{ stats.get(item.name, {}).get('count', 'N/A') }} items ({{ stats.get(item.name, {}).get('fetch_time', 'N/A') }})</span>
+                        <a href="/remove/{{ loop.index0 }}" class="button remove" onclick="event.stopPropagation();">Remove</a>
+                    </div>
+                </div>
+                <div id="edit-form-{{ loop.index0 }}" class="edit-form" style="display: none;" onclick="event.stopPropagation();">
+                    <form action="/update/{{ loop.index0 }}" method="post">
+                        <input type="text" name="name" value="{{ item.name }}" required>
+                        <input type="text" name="url" value="{{ item.url }}" required>
+                        <select name="format" onchange="toggleKeyField(this)">
+                            <option value="text" {% if item.format == 'text' %}selected{% endif %}>Text</option>
+                            <option value="json" {% if item.format == 'json' %}selected{% endif %}>JSON</option>
+                            <option value="csv" {% if item.format == 'csv' %}selected{% endif %}>CSV</option>
+                        </select>
+                        <input type="text" name="key_or_column" value="{{ item.get('key_or_column', '') }}" placeholder="Key or Column" style="display: {% if item.format in ['json', 'csv'] %}block{% else %}none{% endif %};">
+                        <button type="submit" class="button">Update</button>
+                        <button type="button" class="button remove" onclick="toggleEdit({{ loop.index0 }}); event.stopPropagation();">Cancel</button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <hr>
+        <h2>Process Feeds <span class="last-updated">(Last updated: {{ stats.get('last_updated', 'N/A') }})</span></h2>
+        <div id="update-section">
+            <p>Click the button below to update the threat intelligence feeds from the sources above.</p>
+            <button id="run-button" class="button run">Update Feeds</button>
+            <div id="loader" class="loader"></div>
+            <div id="status-message" class="status-message" style="display: none;"></div>
+        </div>
+        <h2>Downloadable Lists</h2>
+        <ul class="file-list">
+            <li><a href="/data/palo_alto_edl.txt">Palo Alto EDL</a></li>
+            <li><a href="/data/fortinet_edl.txt">Fortinet EDL</a></li>
+        </ul>
+        <hr>
+        <h2>Settings</h2>
+        <form action="/update_settings" method="post" class="form-group">
+            <label for="lifetime">Indicator Lifetime (days):</label>
+            <input type="number" id="lifetime" name="indicator_lifetime_days" value="{{ config.get('indicator_lifetime_days', 30) }}" style="width: 80px;">
+            <button type="submit" class="button">Save Settings</button>
+        </form>
+    </div>
+
+    <script>
+        function toggleKeyField(selectElement) {
+            var keyField = selectElement.nextElementSibling;
+            if (selectElement.value === 'json' || selectElement.value === 'csv') {
+                keyField.style.display = 'block';
+            } else {
+                keyField.style.display = 'none';
+            }
+        }
+
+        function toggleEdit(index) {
+            var form = document.getElementById('edit-form-' + index);
+            var display = form.previousElementSibling;
+            if (form.style.display === 'none') {
+                form.style.display = 'block';
+                display.style.display = 'none';
+            } else {
+                form.style.display = 'none';
+                display.style.display = 'flex';
+            }
+        }
+
+        document.getElementById('run-button').addEventListener('click', function() {
+            var loader = document.getElementById('loader');
+            var statusMessage = document.getElementById('status-message');
+            var runButton = document.getElementById('run-button');
+
+            // Show loader and status message
+            loader.style.display = 'block';
+            statusMessage.style.display = 'block';
+            statusMessage.innerText = 'Updating feeds... Please wait.';
+            
+            // Disable button
+            runButton.disabled = true;
+
+            // Make request to the /run endpoint
+            fetch('/run')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'running') {
+                        // Poll for completion status
+                        var checkStatus = setInterval(function() {
+                            fetch('/status')
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.status === 'completed') {
+                                        clearInterval(checkStatus);
+                                        window.location.reload();
+                                    }
+                                });
+                        }, 2000); // Poll every 2 seconds
+                    }
+                });
+        });
+    </script>
+</body>
+</html>

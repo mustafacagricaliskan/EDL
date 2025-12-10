@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+lib/
+lib64/
+Python.h
+.venv/
+
+# Editor-specific
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Logs and databases
+*.log
+*.sqlite
+db.json
+stats.json
+
+# Dependencies
+/node_modules
+
+# Distribution / packaging
+.cache/
+.tox/
+.nox/
+.eggs/
+*.egg
+build/
+dist/
+threat_feed_aggregator.egg-info/

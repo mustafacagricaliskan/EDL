@@ -4,6 +4,7 @@ import os
 import json
 import threading
 from datetime import datetime, timezone
+from tzlocal import get_localzone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.interval import IntervalTrigger # Added for type checking
@@ -100,6 +101,15 @@ def write_config(config):
         json.dump(config, f, indent=4)
     update_scheduled_jobs() # Call after writing config
 
+def read_db():
+    if not os.path.exists(DB_FILE):
+        return {"indicators": {}}
+    with open(DB_FILE, "r") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {"indicators": {}}
+
 def read_stats():
     if not os.path.exists(STATS_FILE):
         return {}
@@ -143,6 +153,10 @@ def logout():
 def index():
     config = read_config()
     stats = read_stats()
+    db_data = read_db() # Read db.json
+    unique_ip_count = len(db_data.get("indicators", {})) # Calculate unique IP count
+
+    local_tz = get_localzone() # Get local timezone once
 
     # Format timestamps in stats for display
     formatted_stats = {}
@@ -150,18 +164,17 @@ def index():
         if isinstance(value, dict) and 'last_updated' in value and value['last_updated'] != 'N/A':
             try:
                 dt_obj = datetime.fromisoformat(value['last_updated'])
-                formatted_stats[key] = {**value, 'last_updated': dt_obj.strftime('%d/%m/%Y %H:%M')}
-            except ValueError:
-                formatted_stats[key] = value # Keep original if parsing fails
+                formatted_stats[key] = {**value, 'last_updated': dt_obj.astimezone(local_tz).strftime('%d/%m/%Y %H:%M')} # Converted to local_tz
+            except (ValueError, TypeError):
+                formatted_stats[key] = value
         elif key == 'last_updated' and value != 'N/A':
-            # Handle overall last_updated
-            if isinstance(value, str): # Explicitly check if value is a string
+            if isinstance(value, str):
                 try:
                     dt_obj = datetime.fromisoformat(value)
-                    formatted_stats[key] = dt_obj.strftime('%d/%m/%Y %H:%M')
-                except (ValueError, TypeError): # Added TypeError here
+                    formatted_stats[key] = dt_obj.astimezone(local_tz).strftime('%d/%m/%Y %H:%M') # Converted to local_tz
+                except (ValueError, TypeError):
                     formatted_stats[key] = value
-            else: # If value is not a string, keep original
+            else:
                 formatted_stats[key] = value
         else:
             formatted_stats[key] = value
@@ -173,11 +186,11 @@ def index():
         jobs_for_template.append({
             'id': job.id,
             'name': job.name,
-            'next_run_time': job.next_run_time.strftime('%d/%m/%Y %H:%M') if job.next_run_time else 'N/A', # Format next run time
+            'next_run_time': job.next_run_time.astimezone(local_tz).strftime('%d/%m/%Y %H:%M') if job.next_run_time else 'N/A', # Converted to local_tz
             'interval': f"{job.trigger.interval.total_seconds() / 60} minutes" if isinstance(job.trigger, IntervalTrigger) else 'N/A'
         })
 
-    return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template) # Pass formatted stats and jobs to template
+    return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template, unique_ip_count=unique_ip_count) # Pass formatted stats and jobs to template
 
 @app.route('/add', methods=['POST'])
 @login_required
@@ -220,7 +233,12 @@ def update_url(index):
                 if "schedule_interval_minutes" in updated_source:
                     del updated_source["schedule_interval_minutes"]
             config["source_urls"][index] = updated_source
-            write_config(config)
+            write_config(config) # This updates the scheduler
+
+            # Trigger an immediate fetch for the updated source in a separate thread
+            thread = threading.Thread(target=fetch_and_process_single_feed, args=(updated_source,))
+            thread.start()
+
     return redirect(url_for('index'))
 
 @app.route('/remove/<int:index>')
@@ -257,8 +275,7 @@ def fetch_and_process_single_feed(source_config):
 
     # After updating a single source, re-generate the full output files
     # This requires reading the entire indicators_db
-    with open(DB_FILE, "r") as f:
-        db = json.load(f)
+    db = read_db() # Use read_db() to safely get data
     processed_data = list(db.get("indicators", {}).keys())
 
     # Format and save for Palo Alto

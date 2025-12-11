@@ -142,6 +142,20 @@
             <input type="number" id="lifetime" name="indicator_lifetime_days" value="{{ config.get('indicator_lifetime_days', 30) }}" style="width: 80px;">
             <button type="submit" class="button">Save Settings</button>
         </form>
+        <hr>
+        <h3>SSL Certificate (PFX)</h3>
+        <form action="/upload_cert" method="post" enctype="multipart/form-data" class="form-group" style="flex-direction: column; align-items: flex-start;">
+            <div style="margin-bottom: 10px;">
+                <label for="pfx_file">Upload .pfx file:</label>
+                <input type="file" id="pfx_file" name="pfx_file" accept=".pfx" required>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label for="password">Password (if any):</label>
+                <input type="password" id="password" name="password">
+            </div>
+            <button type="submit" class="button">Upload Certificate</button>
+            <p style="font-size: 0.8em; color: #666; margin-top: 5px;">Note: Application restart required after upload.</p>
+        </form>
     </div>
 
     <script>

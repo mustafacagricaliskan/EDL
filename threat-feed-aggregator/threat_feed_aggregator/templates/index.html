@@ -3,180 +3,400 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Threat Feed Aggregator</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #f4f6f8; }
-        .navbar { background-color: #fff; border-bottom: 1px solid #ddd; padding: 0.5em 2em; }
-        .container { max-width: 800px; margin: 2em auto; padding: 2em; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; }
-        .button { background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
-        .button:hover { background-color: #0056b3; }
-        .button:disabled { background-color: #a0a0a0; }
-        .button.run { background-color: #28a745; }
-        .button.run:hover { background-color: #218838; }
-        .button.remove { background-color: #dc3545; font-size: 12px; padding: 5px 10px; }
-        .button.remove:hover { background-color: #c82333; }
-        .form-group { margin-bottom: 1em; display: flex; align-items: center; }
-        .form-group input[name="name"] { width: 150px; }
-        .form-group input[name="url"] { flex-grow: 1; }
-        .form-group select { width: 80px; }
-        .form-group input, .form-group select { margin-right: 10px; }
-        .url-list { list-style: none; padding: 0; }
-        .url-list li { background-color: #f9f9f9; padding: 10px; border: 1px solid #eee; border-radius: 4px; margin-bottom: 8px; cursor: pointer; }
-        .url-list li .url-display { display: flex; justify-content: space-between; align-items: center; }
-        .url-list li .edit-form form {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
+        body {
+            background-color: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .url-list li .edit-form input,
-        .url-list li .edit-form select {
-            margin-right: 10px;
-            margin-bottom: 10px;
+        .navbar-brand {
+            font-weight: 600;
+            letter-spacing: 0.5px;
         }
-        .url-list li .edit-form input[name="name"] { width: 150px; }
-        .url-list li .edit-form input[name="url"] { flex-grow: 1; min-width: 150px; }
-        .url-list li .edit-form select { width: 80px; }
-        .url-list li .edit-form input[type="number"] { width: 100px; }
-        .url-list li .edit-form .form-actions {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            width: 100%;
-            margin-top: 0px;
-            margin-bottom: 10px;
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+            margin-bottom: 1.5rem;
+            transition: transform 0.2s;
         }
-        .url-list li .edit-form .form-actions .last-updated-text {
-            margin-right: auto;
-            font-size: 0.9em;
-            color: #666;
-            white-space: nowrap;
+        .card:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
         }
-        .url-list li .edit-form .form-actions button {
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .stat-card h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        .list-group-item {
+            border-left: none;
+            border-right: none;
+            padding: 1rem 1.25rem;
+        }
+        .list-group-item:first-child { border-top: none; }
+        .list-group-item:last-child { border-bottom: none; }
+        
+        .badge-custom {
+            font-weight: 500;
+            padding: 0.5em 0.8em;
+        }
+        .btn-icon {
+            margin-right: 5px;
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
             margin-left: 10px;
         }
-        .url-list li span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; margin-right: 1em; }
-        .url-list li div { display: flex; align-items: center; flex-shrink: 0;}
-        .file-list a { text-decoration: none; color: #007bff; }
-        .file-list a:hover { text-decoration: underline; }
-        .badge { background-color: #6c757d; color: white; padding: 4px 8px; text-align: center; border-radius: 10px; font-size: 12px; }
-        .status-message { padding: 1em; background-color: #e2e3e5; border: 1px solid #d6d8db; border-radius: 5px; margin-top: 1em; text-align: center; }
-        .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #3498db; width: 20px; height: 20px; -webkit-animation: spin 2s linear infinite; animation: spin 2s linear infinite; display: none; margin: 1em auto; }
-        @-webkit-keyframes spin { 0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); } }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .status-badge {
+            font-size: 0.8rem;
+        }
+        .edit-panel {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+            border: 1px solid #e9ecef;
+        }
     </style>
 </head>
 <body>
-    <div class="navbar">
-        <h1>Threat Feed Aggregator</h1>
-    </div>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fa-solid fa-shield-halved me-2"></i>Threat Feed Aggregator
+            </a>
+            <div class="ms-auto">
+                <a href="/logout" class="btn btn-outline-light btn-sm">
+                    <i class="fa-solid fa-sign-out-alt me-1"></i>Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
     <div class="container">
-        <h2>Manage Sources</h2>
-        <form action="/add" method="post" class="form-group">
-            <input type="text" name="name" placeholder="Display Name" required>
-            <input type="text" name="url" placeholder="Enter feed URL" required>
-            <select name="format" onchange="toggleKeyField(this)">
-                <option value="text">Text</option>
-                <option value="json">JSON</option>
-                <option value="csv">CSV</option>
-            </select>
-            <input type="text" name="key_or_column" placeholder="Key or Column" style="display: none;">
-            <input type="number" name="schedule_interval_minutes" placeholder="Schedule (mins, optional)" min="1">
-            <button type="submit" class="button">Add URL</button>
-        </form>
-        <ul class="url-list">
-            {% for item in urls %}
-            <li onclick="toggleEdit({{ loop.index0 }})">
-                <div class="url-display">
-                    <span>{{ item.name }}</span>
-                    <div>
-                        <span class="badge">{{ stats.get(item.name, {}).get('count', 'N/A') }} items ({{ stats.get(item.name, {}).get('fetch_time', 'N/A') }})</span>
-                        {% if item.get('schedule_interval_minutes') %}
-                            <span class="badge">Scheduled: {{ item.schedule_interval_minutes }} mins</span>
-                        {% endif %}
-                        <a href="/remove/{{ loop.index0 }}" class="button remove" onclick="event.stopPropagation();">Remove</a>
+        <!-- Dashboard Stats Row -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card h-100">
+                    <div class="card-body d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="card-title text-muted mb-0">System Status</h5>
+                            <p class="card-text mt-2">
+                                Aggregation System is 
+                                <span class="badge bg-success">Active</span>
+                            </p>
+                            <div id="status-message" class="alert alert-info py-2 px-3 mt-2 mb-0" style="display: none; font-size: 0.9rem;"></div>
+                        </div>
+                        <div class="text-end">
+                            <button id="run-button" class="btn btn-primary btn-lg shadow-sm">
+                                <i class="fa-solid fa-sync me-2"></i>Run All Feeds
+                            </button>
+                            <div id="loader" class="loader" style="display: none;"></div>
+                        </div>
                     </div>
                 </div>
-                <div id="edit-form-{{ loop.index0 }}" class="edit-form" style="display: none;" onclick="event.stopPropagation();">
-                    <form action="/update/{{ loop.index0 }}" method="post">
-                        <input type="text" name="name" value="{{ item.name }}" required>
-                        <input type="text" name="url" value="{{ item.url }}" required>
-                        <select name="format" onchange="toggleKeyField(this)">
-                            <option value="text" {% if item.format == 'text' %}selected{% endif %}>Text</option>
-                            <option value="json" {% if item.format == 'json' %}selected{% endif %}>JSON</option>
-                            <option value="csv" {% if item.format == 'csv' %}selected{% endif %}>CSV</option>
-                        </select>
-                        <input type="text" name="key_or_column" value="{{ item.get('key_or_column', '') }}" placeholder="Key or Column" style="display: {% if item.format in ['json', 'csv'] %}block{% else %}none{% endif %};">
-                        <input type="number" name="schedule_interval_minutes" value="{{ item.get('schedule_interval_minutes', '') }}" placeholder="Schedule (mins, optional)" min="1">
-                        <div class="form-actions"> <!-- New wrapper for Last Updated and buttons -->
-                            <span class="last-updated-text">Last Updated: {{ stats.get(item.name, {}).get('last_updated', 'N/A') }}</span>
-                            <button type="submit" class="button">Update</button>
-                            <button type="button" class="button remove" onclick="toggleEdit({{ loop.index0 }}); event.stopPropagation();">Cancel</button>
-                        </div>
-                    </form>
+            </div>
+            <div class="col-md-4">
+                <div class="card stat-card h-100">
+                    <div class="card-body text-center d-flex flex-column justify-content-center">
+                        <h6 class="text-uppercase opacity-75 mb-2">Total Unique IPs</h6>
+                        <h2 class="mb-0">{{ unique_ip_count }}</h2>
+                    </div>
                 </div>
-            </li>
-            {% endfor %}
-        </ul>
-        <hr>
-        <h2>Feeds Aggregation</h2>
-        <div id="update-section">
-            <p>Click the button below to update all threat intelligence feeds now.</p>
-            <button id="run-button" class="button run">Run All Feeds</button>
-            <div id="loader" class="loader"></div>
-            <div id="status-message" class="status-message" style="display: none;"></div>
+            </div>
         </div>
-        <hr>
-        <h2>IP Statistics</h2>
-        <p>Total Unique IPs: {{ unique_ip_count }}</p>
-        <hr>
-        <h2>Downloadable Lists</h2>
-        <ul class="file-list">
-            <li><a href="/data/palo_alto_edl.txt">Palo Alto EDL</a></li>
-            <li><a href="/data/fortinet_edl.txt">Fortinet EDL</a></li>
-        </ul>
-        <hr>
-        <h2>Settings</h2>
-        <form action="/update_settings" method="post" class="form-group">
-            <label for="lifetime">Indicator Lifetime (days):</label>
-            <input type="number" id="lifetime" name="indicator_lifetime_days" value="{{ config.get('indicator_lifetime_days', 30) }}" style="width: 80px;">
-            <button type="submit" class="button">Save Settings</button>
-        </form>
-        <hr>
-        <h3>SSL Certificate (PFX)</h3>
-        <form action="/upload_cert" method="post" enctype="multipart/form-data" class="form-group" style="flex-direction: column; align-items: flex-start;">
-            <div style="margin-bottom: 10px;">
-                <label for="pfx_file">Upload .pfx file:</label>
-                <input type="file" id="pfx_file" name="pfx_file" accept=".pfx" required>
+
+        <div class="row">
+            <!-- Left Column: Sources -->
+            <div class="col-lg-8">
+                <!-- Add New Source Card -->
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0"><i class="fa-solid fa-plus-circle me-2 text-primary"></i>Add New Source</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/add" method="post" class="row g-3">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <div class="col-md-4">
+                                <input type="text" name="name" class="form-control" placeholder="Display Name" required>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="text" name="url" class="form-control" placeholder="Feed URL" required>
+                            </div>
+                            <div class="col-md-3">
+                                <select name="format" class="form-select" onchange="toggleKeyField(this)">
+                                    <option value="text">Text</option>
+                                    <option value="json">JSON</option>
+                                    <option value="csv">CSV</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12" id="key-field-group" style="display: none;">
+                                <input type="text" name="key_or_column" class="form-control" placeholder="JSON Key or CSV Column Index">
+                            </div>
+                            <div class="col-md-8">
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fa-regular fa-clock"></i></span>
+                                    <input type="number" name="schedule_interval_minutes" class="form-control" placeholder="Schedule Interval (minutes)" min="1">
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button type="submit" class="btn btn-success w-100">
+                                    <i class="fa-solid fa-check me-1"></i>Add Source
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Sources List -->
+                <div class="card">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fa-solid fa-list-ul me-2 text-primary"></i>Active Sources</h5>
+                        <span class="badge bg-secondary">{{ urls|length }} Sources</span>
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        {% for item in urls %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center" style="cursor: pointer;" onclick="toggleEdit({{ loop.index0 }})">
+                                <div>
+                                    <h6 class="mb-1 fw-bold">{{ item.name }}</h6>
+                                    <small class="text-muted text-break">{{ item.url }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="mb-1">
+                                        <span class="badge bg-light text-dark border me-1">
+                                            <i class="fa-solid fa-database me-1"></i>{{ stats.get(item.name, {}).get('count', 0) }} IPs
+                                        </span>
+                                        {% if item.get('schedule_interval_minutes') %}
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="fa-solid fa-clock me-1"></i>{{ item.schedule_interval_minutes }}m
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted d-block" style="font-size: 0.75rem;">
+                                        Last: {{ stats.get(item.name, {}).get('last_updated', 'Never') }}
+                                        ({{ stats.get(item.name, {}).get('fetch_time', '0s') }})
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <!-- Hidden Edit Form -->
+                            <div id="edit-form-{{ loop.index0 }}" class="edit-panel" style="display: none;" onclick="event.stopPropagation();">
+                                <form action="/update/{{ loop.index0 }}" method="post">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Name</label>
+                                            <input type="text" name="name" value="{{ item.name }}" class="form-control form-control-sm" required>
+                                        </div>
+                                        <div class="col-md-8">
+                                            <label class="form-label small">URL</label>
+                                            <input type="text" name="url" value="{{ item.url }}" class="form-control form-control-sm" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Format</label>
+                                            <select name="format" class="form-select form-select-sm" onchange="toggleKeyField(this)">
+                                                <option value="text" {% if item.format == 'text' %}selected{% endif %}>Text</option>
+                                                <option value="json" {% if item.format == 'json' %}selected{% endif %}>JSON</option>
+                                                <option value="csv" {% if item.format == 'csv' %}selected{% endif %}>CSV</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Key/Col</label>
+                                            <input type="text" name="key_or_column" value="{{ item.get('key_or_column', '') }}" class="form-control form-control-sm" placeholder="Optional">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Interval (m)</label>
+                                            <input type="number" name="schedule_interval_minutes" value="{{ item.get('schedule_interval_minutes', '') }}" class="form-control form-control-sm" min="1">
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-3">
+                                        <a href="/remove/{{ loop.index0 }}" class="btn btn-outline-danger btn-sm">
+                                            <i class="fa-solid fa-trash-can me-1"></i>Remove
+                                        </a>
+                                        <div>
+                                            <button type="button" class="btn btn-secondary btn-sm me-1" onclick="toggleEdit({{ loop.index0 }})">Cancel</button>
+                                            <button type="submit" class="btn btn-primary btn-sm">Update & Run</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </li>
+                        {% endfor %}
+                        {% if not urls %}
+                        <li class="list-group-item text-center py-4 text-muted">
+                            <i class="fa-solid fa-info-circle me-2"></i>No threat feeds configured yet.
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
             </div>
-            <div style="margin-bottom: 10px;">
-                <label for="password">Password (if any):</label>
-                <input type="password" id="password" name="password">
+
+            <!-- Right Column: Sidebar -->
+            <div class="col-lg-4">
+                <!-- Downloads Card -->
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0"><i class="fa-solid fa-download me-2 text-primary"></i>Export Lists</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="/data/palo_alto_edl.txt" class="btn btn-outline-dark text-start">
+                                <i class="fa-solid fa-file-shield me-2 text-danger"></i>Palo Alto EDL
+                            </a>
+                            <a href="/data/fortinet_edl.txt" class="btn btn-outline-dark text-start">
+                                <i class="fa-solid fa-file-shield me-2 text-success"></i>Fortinet EDL
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Card -->
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0"><i class="fa-solid fa-sliders me-2 text-primary"></i>Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/update_settings" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <div class="mb-3">
+                                <label for="lifetime" class="form-label">Indicator Lifetime (days)</label>
+                                <div class="input-group">
+                                    <input type="number" id="lifetime" name="indicator_lifetime_days" value="{{ config.get('indicator_lifetime_days', 30) }}" class="form-control">
+                                    <button type="submit" class="btn btn-outline-primary">Save</button>
+                                </div>
+                                <div class="form-text">Older IPs are automatically removed.</div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- SSL Card -->
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0"><i class="fa-solid fa-lock me-2 text-warning"></i>SSL Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/upload_cert" method="post" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <div class="mb-3">
+                                <label for="pfx_file" class="form-label small">Upload .pfx Certificate</label>
+                                <input type="file" id="pfx_file" name="pfx_file" class="form-control form-control-sm" accept=".pfx" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label small">PFX Password</label>
+                                <input type="password" id="password" name="password" class="form-control form-control-sm" placeholder="Optional">
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-warning btn-sm text-dark">
+                                    <i class="fa-solid fa-upload me-1"></i>Upload & Restart
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- LDAP Configuration Card -->
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0"><i class="fa-solid fa-users me-2 text-info"></i>LDAP Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/update_ldap_settings" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="ldap_enabled" name="ldap_enabled" {% if config.get('auth', {}).get('ldap', {}).get('enabled') %}checked{% endif %}>
+                                <label class="form-check-label" for="ldap_enabled">Enable LDAP Auth</label>
+                            </div>
+
+                            <div class="mb-2">
+                                <label for="ldap_server" class="form-label small">Server URL</label>
+                                <input type="text" id="ldap_server" name="ldap_server" class="form-control form-control-sm" value="{{ config.get('auth', {}).get('ldap', {}).get('server', '') }}" placeholder="ldap://192.168.1.10">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="ldap_domain" class="form-label small">Domain / Base DN</label>
+                                <input type="text" id="ldap_domain" name="ldap_domain" class="form-control form-control-sm" value="{{ config.get('auth', {}).get('ldap', {}).get('domain', '') }}" placeholder="EXAMPLE or example.com">
+                            </div>
+
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-info btn-sm text-white">
+                                    <i class="fa-solid fa-save me-1"></i>Save LDAP Settings
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="text-center text-muted mt-3">
+                    <small>Threat Feed Aggregator v1.0</small>
+                </div>
             </div>
-            <button type="submit" class="button">Upload Certificate</button>
-            <p style="font-size: 0.8em; color: #666; margin-top: 5px;">Note: Application restart required after upload.</p>
-        </form>
+        </div>
     </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
         function toggleKeyField(selectElement) {
-            var keyField = selectElement.nextElementSibling;
-            if (selectElement.value === 'json' || selectElement.value === 'csv') {
-                keyField.style.display = 'block';
+            // Find key field in the same form, handling both main add form and list update forms
+            let form = selectElement.closest('form');
+            let keyField;
+            
+            // Check if it's the main form or loop form
+            if (form.classList.contains('row')) {
+                 keyField = document.getElementById('key-field-group');
             } else {
-                keyField.style.display = 'none';
+                 // For loop forms, the key field is the 4th input container
+                 // simpler to search by name within the form
+                 let input = form.querySelector('input[name="key_or_column"]');
+                 keyField = input.closest('div'); 
+                 // If the layout in loop form puts input directly in col-md-4, that's what we target.
+                 // Actually in my loop html: <div class="col-md-4"><label>Key/Col</label><input...></div>
+                 keyField = input.closest('.col-md-4');
+            }
+
+            if (selectElement.value === 'json' || selectElement.value === 'csv') {
+                if(keyField) keyField.style.display = 'block';
+                // For the main form specifically
+                if(selectElement.closest('.card-body').querySelector('#key-field-group')) {
+                     document.getElementById('key-field-group').style.display = 'block';
+                }
+            } else {
+                if(keyField) keyField.style.display = 'none';
+                 // For the main form specifically
+                if(selectElement.closest('.card-body').querySelector('#key-field-group')) {
+                     document.getElementById('key-field-group').style.display = 'none';
+                }
             }
         }
 
         function toggleEdit(index) {
             var form = document.getElementById('edit-form-' + index);
-            var display = form.previousElementSibling;
             if (form.style.display === 'none') {
                 form.style.display = 'block';
-                display.style.display = 'none';
             } else {
                 form.style.display = 'none';
-                display.style.display = 'flex';
             }
         }
 
@@ -186,15 +406,22 @@
             var runButton = document.getElementById('run-button');
 
             // Show loader and status message
-            loader.style.display = 'block';
+            loader.style.display = 'inline-block';
             statusMessage.style.display = 'block';
-            statusMessage.innerText = 'Updating feeds... Please wait.';
+            statusMessage.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Updating feeds... Please wait.';
+            statusMessage.className = 'alert alert-warning py-2 px-3 mt-2 mb-0';
             
             // Disable button
             runButton.disabled = true;
 
+            var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
             // Make request to the /run endpoint
-            fetch('/run')
+            fetch('/run', {
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'running') {
@@ -210,6 +437,12 @@
                                 });
                         }, 2000); // Poll every 2 seconds
                     }
+                })
+                .catch(error => {
+                    statusMessage.innerHTML = '<i class="fa-solid fa-exclamation-triangle me-2"></i>Error starting update.';
+                    statusMessage.className = 'alert alert-danger py-2 px-3 mt-2 mb-0';
+                    loader.style.display = 'none';
+                    runButton.disabled = false;
                 });
         });
     </script>

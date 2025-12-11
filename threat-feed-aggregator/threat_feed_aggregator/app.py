@@ -15,6 +15,7 @@ from .aggregator import main as run_aggregator, aggregate_single_source
 from .output_formatter import format_for_palo_alto, format_for_fortinet
 from .db_manager import init_db, get_all_indicators, get_unique_ip_count
 from .cert_manager import generate_self_signed_cert, process_pfx_upload, get_cert_paths
+from .auth_manager import check_credentials
 
 app = Flask(__name__)
 # Use environment variable for secret key, fallback for dev
@@ -146,19 +147,26 @@ def write_stats(stats):
 def login():
     error = None
     if request.method == 'POST':
-        # Use environment variable for admin password
-        admin_password = os.environ.get('ADMIN_PASSWORD', '123456')
-        if request.form['username'] != 'admin' or request.form['password'] != admin_password:
-            error = 'Invalid Credentials. Please try again.'
-        else:
+        username = request.form['username']
+        password = request.form['password']
+        
+        # Use auth_manager to check credentials (Local or LDAP)
+        success, message = check_credentials(username, password)
+        
+        if success:
             session['logged_in'] = True
+            session['username'] = username # Store username for display
             session.modified = True
             return redirect(url_for('index'))
+        else:
+            error = message if message else 'Invalid Credentials.'
+
     return render_template('login.html', error=error)
 
 @app.route('/logout')
 def logout():
     session.pop('logged_in', None)
+    session.pop('username', None)
     return redirect(url_for('index'))
 
 @app.route('/')
@@ -244,7 +252,7 @@ def update_url(index):
             else:
                 if "schedule_interval_minutes" in updated_source:
                     del updated_source["schedule_interval_minutes"]
-            config["source_urls"].append(updated_source)
+            config["source_urls"][index] = updated_source
             write_config(config)
 
             thread = threading.Thread(target=fetch_and_process_single_feed, args=(updated_source,))
@@ -269,6 +277,26 @@ def update_settings():
         config = read_config()
         config['indicator_lifetime_days'] = int(lifetime)
         write_config(config)
+    return redirect(url_for('index'))
+
+@app.route('/update_ldap_settings', methods=['POST'])
+@login_required
+def update_ldap_settings():
+    server = request.form.get('ldap_server')
+    domain = request.form.get('ldap_domain')
+    enabled = request.form.get('ldap_enabled') == 'on'
+    
+    config = read_config()
+    if 'auth' not in config:
+        config['auth'] = {}
+    
+    config['auth']['ldap'] = {
+        'enabled': enabled,
+        'server': server,
+        'domain': domain
+    }
+    
+    write_config(config)
     return redirect(url_for('index'))
 
 @app.route('/upload_cert', methods=['POST'])

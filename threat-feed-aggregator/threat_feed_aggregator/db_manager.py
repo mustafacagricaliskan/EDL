@@ -140,7 +140,7 @@ def get_unique_ip_count():
         conn.close()
 
 def get_country_stats():
-    """Returns a list of tuples (country_code, count) ordered by count descending."""
+    """Returns a list of dictionaries (country_code, count) ordered by count descending."""
     conn = get_db_connection()
     try:
         # Group by country, handle NULLs as 'Unknown'
@@ -151,7 +151,7 @@ def get_country_stats():
             ORDER BY count DESC
             LIMIT 10
         ''')
-        return cursor.fetchall()
+        return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logging.error(f"Error getting country stats: {e}")
         return []

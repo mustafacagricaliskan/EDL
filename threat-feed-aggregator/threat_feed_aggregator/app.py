@@ -178,6 +178,7 @@ def logout():
     return redirect(url_for('index'))
 
 @app.route('/')
+@login_required
 def index():
     config = read_config()
     stats = read_stats()
@@ -398,7 +399,7 @@ def aggregation_task(update_status=True):
     logging.debug("aggregation_task completed.")
 
 @app.route('/run')
-# @login_required
+@login_required
 def run_script():
     logging.debug("Received request to /run endpoint.")
     global AGGREGATION_STATUS
@@ -413,7 +414,7 @@ def run_script():
     return jsonify({"status": "running"})
 
 @app.route('/status')
-# @login_required
+@login_required
 def status():
     logging.debug("Received request to /status endpoint.")
     return jsonify({"status": AGGREGATION_STATUS})

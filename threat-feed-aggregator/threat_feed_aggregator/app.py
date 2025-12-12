@@ -362,6 +362,7 @@ def aggregation_task(update_status=True):
     """
     Runs a full aggregation of all configured threat feeds.
     """
+    logging.debug(f"Starting aggregation_task (update_status={update_status}).")
     global AGGREGATION_STATUS
     if update_status:
         AGGREGATION_STATUS = "running"
@@ -391,19 +392,27 @@ def aggregation_task(update_status=True):
 
     if update_status:
         AGGREGATION_STATUS = "completed"
+    logging.debug("aggregation_task completed.")
 
 @app.route('/run')
 @login_required
 def run_script():
+    logging.debug("Received request to /run endpoint.")
     global AGGREGATION_STATUS
+    if AGGREGATION_STATUS == "running":
+        logging.info("Aggregation already running, returning status.")
+        return jsonify({"status": AGGREGATION_STATUS})
+    
     AGGREGATION_STATUS = "running"
     thread = threading.Thread(target=aggregation_task)
     thread.start()
+    logging.info("Aggregation task started in a new thread.")
     return jsonify({"status": "running"})
 
 @app.route('/status')
 @login_required
 def status():
+    logging.debug("Received request to /status endpoint.")
     return jsonify({"status": AGGREGATION_STATUS})
 
 @app.route('/data/<path:filename>')

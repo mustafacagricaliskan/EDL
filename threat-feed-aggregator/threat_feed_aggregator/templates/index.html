@@ -427,8 +427,8 @@
         const countryStats = {{ country_stats|tojson }};
         if (countryStats && countryStats.length > 0) {
             const ctx = document.getElementById('countryChart').getContext('2d');
-            const labels = countryStats.map(item => item[0] || 'Unknown');
-            const data = countryStats.map(item => item[1]);
+            const labels = countryStats.map(item => item.country_code || 'Unknown');
+            const data = countryStats.map(item => item.count);
             
             new Chart(ctx, {
                 type: 'bar',

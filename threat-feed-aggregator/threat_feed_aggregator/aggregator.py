@@ -115,7 +115,13 @@ def aggregate_single_source(source_config):
         # 3. Enrich with GeoIP
         enriched_items = []
         for item in filtered_items:
-            country = get_country_code(item)
+            country = None
+            try:
+                # Only attempt GeoIP lookup for single IP addresses, not CIDRs
+                if '/' not in item:
+                    country = get_country_code(item)
+            except Exception as e:
+                logger.debug(f"Error enriching {item} with GeoIP: {e}")
             enriched_items.append((item, country))
 
         # 4. Upsert

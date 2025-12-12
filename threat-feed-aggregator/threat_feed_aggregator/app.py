@@ -192,6 +192,8 @@ def index():
     # Get Whitelist
     whitelist = get_whitelist()
     
+    logging.debug(f"Country Stats for chart: {country_stats}")
+    
     local_tz = get_localzone()
 
     # Format timestamps

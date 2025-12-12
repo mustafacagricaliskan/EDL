@@ -14,12 +14,24 @@ def init_db():
     """Initializes the database with the necessary tables."""
     conn = get_db_connection()
     try:
+        # Create indicators table if not exists
         conn.execute('''
             CREATE TABLE IF NOT EXISTS indicators (
                 indicator TEXT PRIMARY KEY,
                 last_seen TEXT NOT NULL
             )
         ''')
+        
+        # Check if country column exists, if not add it
+        cursor = conn.execute("PRAGMA table_info(indicators)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if 'country' not in columns:
+            try:
+                conn.execute('ALTER TABLE indicators ADD COLUMN country TEXT')
+                logging.info("Added 'country' column to indicators table.")
+            except Exception as e:
+                logging.error(f"Error adding country column: {e}")
+
         # Create Whitelist Table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS whitelist (
@@ -53,16 +65,28 @@ def upsert_indicator(indicator):
         conn.close()
 
 def upsert_indicators_bulk(indicators):
-    """Bulk upsert for a list of indicators."""
+    """
+    Bulk upsert for a list of indicators.
+    Indicators can be a list of strings (IPs) or tuples (IP, Country).
+    """
     conn = get_db_connection()
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
-        data = [(ind, now_iso) for ind in indicators]
+        data = []
+        for item in indicators:
+            if isinstance(item, tuple):
+                # (indicator, country)
+                data.append((item[0], now_iso, item[1]))
+            else:
+                # indicator only
+                data.append((item, now_iso, None))
+
         conn.executemany('''
-            INSERT INTO indicators (indicator, last_seen)
-            VALUES (?, ?)
+            INSERT INTO indicators (indicator, last_seen, country)
+            VALUES (?, ?, ?)
             ON CONFLICT(indicator) DO UPDATE SET
-                last_seen = excluded.last_seen
+                last_seen = excluded.last_seen,
+                country = COALESCE(excluded.country, indicators.country)
         ''', data)
         conn.commit()
     except Exception as e:
@@ -112,6 +136,25 @@ def get_unique_ip_count():
     try:
         cursor = conn.execute('SELECT COUNT(*) FROM indicators')
         return cursor.fetchone()[0]
+    finally:
+        conn.close()
+
+def get_country_stats():
+    """Returns a list of tuples (country_code, count) ordered by count descending."""
+    conn = get_db_connection()
+    try:
+        # Group by country, handle NULLs as 'Unknown'
+        cursor = conn.execute('''
+            SELECT COALESCE(country, 'Unknown') as country_code, COUNT(*) as count 
+            FROM indicators 
+            GROUP BY country_code 
+            ORDER BY count DESC
+            LIMIT 10
+        ''')
+        return cursor.fetchall()
+    except Exception as e:
+        logging.error(f"Error getting country stats: {e}")
+        return []
     finally:
         conn.close()
 

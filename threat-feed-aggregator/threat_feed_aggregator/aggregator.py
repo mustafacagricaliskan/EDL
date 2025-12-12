@@ -6,6 +6,7 @@ from .data_collector import fetch_data_from_url
 from .parsers import parse_text, parse_json, parse_csv # Imported for direct parsing in aggregate_single_source
 from .db_manager import remove_old_indicators, get_all_indicators, get_whitelist, upsert_indicators_bulk, delete_whitelisted_indicators as db_delete_whitelisted_indicators # Alias to avoid conflict
 from .utils import filter_whitelisted_items, is_ip_whitelisted # Import is_ip_whitelisted for cleanup
+from .geoip_manager import get_country_code # Import GeoIP
 import time
 import ipaddress # For CIDR checks in cleanup
 import logging
@@ -111,11 +112,17 @@ def aggregate_single_source(source_config):
         
         filtered_items = filter_whitelisted_items(items, whitelist_items)
         
-        # 3. Upsert
-        if filtered_items:
-            upsert_indicators_bulk(filtered_items)
+        # 3. Enrich with GeoIP
+        enriched_items = []
+        for item in filtered_items:
+            country = get_country_code(item)
+            enriched_items.append((item, country))
+
+        # 4. Upsert
+        if enriched_items:
+            upsert_indicators_bulk(enriched_items)
             
-        count = len(filtered_items)
+        count = len(enriched_items)
     
     # Return stats data
     return {

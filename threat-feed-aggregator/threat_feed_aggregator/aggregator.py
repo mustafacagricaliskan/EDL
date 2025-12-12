@@ -67,8 +67,14 @@ def _cleanup_whitelisted_items_from_db():
             indicators_to_delete.append(indicator)
     
     if indicators_to_delete:
-        logging.info(f"Attempting to delete {len(indicators_to_delete)} whitelisted items: {indicators_to_delete[:5]}...") # Log first 5
-        db_delete_whitelisted_indicators(indicators_to_delete) # Use the specific DB delete function
+        logging.info(f"Attempting to delete {len(indicators_to_delete)} whitelisted items: {indicators_to_delete[:5]}...")
+        
+        # Chunk deletion to avoid SQLite limits (typically 999 variables)
+        chunk_size = 900
+        for i in range(0, len(indicators_to_delete), chunk_size):
+            chunk = indicators_to_delete[i:i + chunk_size]
+            db_delete_whitelisted_indicators(chunk)
+            
         logging.info(f"Cleaned up {len(indicators_to_delete)} whitelisted items from main DB.")
     else:
         logging.info("No whitelisted items found in main DB for cleanup.")
@@ -130,6 +136,9 @@ def fetch_and_process_single_feed(source_config):
 
     # Call the single source aggregation function
     aggregate_single_source(source_config)
+
+    # Perform cleanup of whitelisted items to ensure DB consistency
+    _cleanup_whitelisted_items_from_db()
 
     # After updating a single source, re-generate the full output files
     # This requires reading the entire indicators_db

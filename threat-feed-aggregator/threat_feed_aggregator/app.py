@@ -1,18 +1,19 @@
-from flask import Flask, render_template, redirect, url_for, send_from_directory, request, jsonify, session, flash
-from functools import wraps
+import logging
 import os
 import json
 import threading
 from datetime import datetime, timezone
+from functools import wraps
+
+# Configure root logger immediately
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+
+from flask import Flask, render_template, redirect, url_for, send_from_directory, request, jsonify, session, flash
 from tzlocal import get_localzone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.interval import IntervalTrigger
 from flask_wtf.csrf import CSRFProtect
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import refactored modules
 from .aggregator import main as run_aggregator, aggregate_single_source, fetch_and_process_single_feed

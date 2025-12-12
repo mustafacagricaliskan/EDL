@@ -13,5 +13,12 @@
             "format": "text",
             "schedule_interval_minutes": 120
         }
-    ]
+    ],
+    "auth": {
+        "ldap": {
+            "enabled": false,
+            "server": "",
+            "domain": ""
+        }
+    }
 }

@@ -6,43 +6,62 @@ logger.setLevel(logging.DEBUG) # Set to DEBUG for this module
 
 def is_ip_whitelisted(ip_str, whitelist_items):
     """
-    Checks if an IP string is in the whitelist.
+    Checks if an IP string (or CIDR) is in the whitelist.
     whitelist_items: list of strings (IPs or CIDRs)
     """
-    logging.debug(f"Checking if {ip_str} is whitelisted against: {whitelist_items}")
+    logger.debug(f"Checking if {ip_str} is whitelisted against: {whitelist_items}")
     
+    target = None
+    is_network = False
+
     try:
-        ip = ipaddress.ip_address(ip_str)
+        target = ipaddress.ip_address(ip_str)
     except ValueError:
-        # Not a valid IP, maybe a URL or domain.
-        # If whitelist has exact string match, return True
+        try:
+            target = ipaddress.ip_network(ip_str, strict=False)
+            is_network = True
+        except ValueError:
+            # Not a valid IP or CIDR
+            pass
+
+    if target is None:
+        # String match fallback
         if ip_str in whitelist_items:
-            logging.debug(f"'{ip_str}' matched exact string in whitelist.")
+            logger.debug(f"'{ip_str}' matched exact string in whitelist.")
             return True
         return False
 
     for item in whitelist_items:
         try:
             if '/' in item:
-                # Check if IP matches CIDR
-                network = ipaddress.ip_network(item, strict=False)
-                if ip in network:
-                    logging.debug(f"'{ip_str}' matched CIDR '{item}' in whitelist.")
-                    return True
+                # Whitelist item is a CIDR
+                wl_net = ipaddress.ip_network(item, strict=False)
+                
+                if is_network:
+                    # Check if target network is a subnet of whitelist network OR overlaps
+                    # Ideally we want to remove if it's FULLY contained.
+                    if target.subnet_of(wl_net):
+                        logger.debug(f"CIDR '{ip_str}' is subnet of whitelisted '{item}'.")
+                        return True
+                    if target == wl_net:
+                        logger.debug(f"CIDR '{ip_str}' equals whitelisted '{item}'.")
+                        return True
+                else:
+                    # Target is an IP
+                    if target in wl_net:
+                        logger.debug(f"IP '{ip_str}' in whitelisted CIDR '{item}'.")
+                        return True
             else:
-                # Check exact IP match
-                if ip == ipaddress.ip_address(item):
-                    logging.debug(f"'{ip_str}' matched exact IP '{item}' in whitelist.")
+                # Whitelist item is an exact IP
+                wl_ip = ipaddress.ip_address(item)
+                if not is_network and target == wl_ip:
+                    logger.debug(f"IP '{ip_str}' matched whitelisted IP '{item}'.")
                     return True
+                
         except ValueError:
-             # Whitelist item might not be an IP/CIDR (e.g. domain), fallback to string match
-            if ip_str == item: # This path is for non-IP whitelist items against a non-IP item.
-                               # It's less likely to be hit for IP_str input.
-                logging.debug(f"'{ip_str}' matched non-IP string '{item}' in whitelist.")
-                return True
             continue
             
-    logging.debug(f"'{ip_str}' not found in whitelist.")
+    logger.debug(f"'{ip_str}' not found in whitelist.")
     return False
 
 def filter_whitelisted_items(items, whitelist_items):

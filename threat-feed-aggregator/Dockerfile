@@ -53,4 +53,4 @@ EXPOSE 8443
 # --threads 4: Four threads per worker for concurrency
 # -b 0.0.0.0:8443: Bind to port 8443
 # --certfile & --keyfile: SSL configuration
-CMD ["gunicorn", "-w", "1", "--threads", "4", "-b", "0.0.0.0:8443", "--certfile=threat_feed_aggregator/certs/cert.pem", "--keyfile=threat_feed_aggregator/certs/key.pem", "threat_feed_aggregator.app:app"]
+CMD ["gunicorn", "-w", "1", "--threads", "4", "-b", "0.0.0.0:8443", "--certfile=threat_feed_aggregator/certs/cert.pem", "--keyfile=threat_feed_aggregator/certs/key.pem", "--log-level", "debug", "--access-logfile", "-", "--error-logfile", "-", "threat_feed_aggregator.app:app"]

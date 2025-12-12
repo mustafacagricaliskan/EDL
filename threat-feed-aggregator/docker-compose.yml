@@ -5,7 +5,7 @@ services:
     build: .
     container_name: threat-feed-aggregator
     ports:
-      - "443:443"
+      - "443:8443"
     volumes:
       # Persist SQLite Database and EDL files
       - ./data:/app/data
@@ -18,4 +18,11 @@ services:
     environment:
       - SECRET_KEY=${SECRET_KEY:-change_me_in_prod}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-123456}
+      # Tell Gunicorn/Flask where to look for certs if needed by app logic
+      - FLASK_APP=threat_feed_aggregator.app
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:8443/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

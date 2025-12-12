@@ -404,9 +404,13 @@ def status():
 def download_file(filename):
     return send_from_directory(DATA_DIR, filename, as_attachment=True)
 
-if __name__ == '__main__':
+# Start scheduler when app loads (for Gunicorn support with single worker)
+# Note: With multiple workers, this would cause duplicate jobs.
+if not scheduler.running:
     scheduler.start()
     update_scheduled_jobs()
+
+if __name__ == '__main__':
     cert_file, key_file = get_cert_paths()
     # Enable SSL
     app.run(debug=True, use_reloader=False, ssl_context=(cert_file, key_file), host='0.0.0.0', port=443)

@@ -3,13 +3,20 @@ import json
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .data_collector import fetch_data_from_url
-from .db_manager import remove_old_indicators, get_all_indicators, get_whitelist
-from .utils import filter_whitelisted_items
+from .parsers import parse_text, parse_json, parse_csv # Imported for direct parsing in aggregate_single_source
+from .db_manager import remove_old_indicators, get_all_indicators, get_whitelist, upsert_indicators_bulk, delete_whitelisted_indicators as db_delete_whitelisted_indicators # Alias to avoid conflict
+from .utils import filter_whitelisted_items, is_ip_whitelisted # Import is_ip_whitelisted for cleanup
 import time
+import ipaddress # For CIDR checks in cleanup
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG) # Set to DEBUG for this module
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config", "config.json")
 STATS_FILE = os.path.join(BASE_DIR, "stats.json")
+DATA_DIR = os.path.join(BASE_DIR, "data") # Added DATA_DIR for output files
 
 def read_config():
     if not os.path.exists(CONFIG_FILE):
@@ -36,6 +43,37 @@ def write_stats(stats):
     with open(STATS_FILE, "w") as f:
         json.dump(stats, f, indent=4)
 
+def _cleanup_whitelisted_items_from_db():
+    """
+    Scans the entire indicators DB and removes any item that matches the whitelist.
+    This is called after each aggregation run to ensure existing DB is clean.
+    """
+    whitelist_db_items = get_whitelist()
+    whitelist_filters = [w['item'] for w in whitelist_db_items]
+    
+    if not whitelist_filters:
+        logging.info("Whitelist is empty, skipping cleanup.")
+        return
+
+    all_current_indicators_dict = get_all_indicators()
+    all_current_indicators_list = list(all_current_indicators_dict.keys())
+    logging.info(f"Total indicators before cleanup: {len(all_current_indicators_list)}")
+
+    # Filter out indicators that are in the whitelist
+    indicators_to_delete = []
+
+    for indicator in all_current_indicators_list:
+        if is_ip_whitelisted(indicator, whitelist_filters):
+            indicators_to_delete.append(indicator)
+    
+    if indicators_to_delete:
+        logging.info(f"Attempting to delete {len(indicators_to_delete)} whitelisted items: {indicators_to_delete[:5]}...") # Log first 5
+        db_delete_whitelisted_indicators(indicators_to_delete) # Use the specific DB delete function
+        logging.info(f"Cleaned up {len(indicators_to_delete)} whitelisted items from main DB.")
+    else:
+        logging.info("No whitelisted items found in main DB for cleanup.")
+
+
 def aggregate_single_source(source_config):
     """
     Fetches and processes data for a single threat feed source.
@@ -53,16 +91,6 @@ def aggregate_single_source(source_config):
 
     count = 0
     if raw_data:
-        # 1. Parse Data but don't insert yet (process_data modified logic needed or handle logic here)
-        # process_data currently inserts. We need to refactor process_data OR
-        # better: fetch raw items using parsers directly here, filter, then upsert.
-        # But to keep process_data usable, let's look at process_data.py
-        # It calls upsert_indicators_bulk.
-        
-        # We will import parsers here to separate parsing from insertion for filtering.
-        from .parsers import parse_text, parse_json, parse_csv
-        from .db_manager import upsert_indicators_bulk
-        
         items = []
         if data_format == "text":
             items = parse_text(raw_data)
@@ -90,6 +118,39 @@ def aggregate_single_source(source_config):
         "fetch_time": fetch_duration,
         "last_updated": datetime.now(timezone.utc).isoformat()
     }
+
+def fetch_and_process_single_feed(source_config):
+    """
+    Fetches and processes data for a single threat feed source, updates DB and stats,
+    then updates the output files (Palo Alto, Fortinet) based on the current full DB.
+    This function is designed to be run by the scheduler for individual sources.
+    """
+    name = source_config["name"]
+    print(f"Starting scheduled fetch for {name}...")
+
+    # Call the single source aggregation function
+    aggregate_single_source(source_config)
+
+    # After updating a single source, re-generate the full output files
+    # This requires reading the entire indicators_db
+    indicators_data = get_all_indicators()
+    processed_data = list(indicators_data.keys())
+
+    from .output_formatter import format_for_palo_alto, format_for_fortinet # Import locally to avoid circular
+
+    # Format and save for Palo Alto
+    palo_alto_output = format_for_palo_alto(processed_data)
+    palo_alto_file_path = os.path.join(DATA_DIR, "palo_alto_edl.txt")
+    with open(palo_alto_file_path, "w") as f:
+        f.write(palo_alto_output)
+
+    # Format and save for Fortinet
+    fortinet_output = format_for_fortinet(processed_data)
+    fortinet_file_path = os.path.join(DATA_DIR, "fortinet_edl.txt")
+    with open(fortinet_file_path, "w") as f:
+        f.write(fortinet_output)
+    
+    print(f"Completed scheduled fetch for {name}.")
 
 def main(source_urls):
     """
@@ -126,10 +187,13 @@ def main(source_urls):
                     "count": result["count"],
                     "fetch_time": result["fetch_time"]
                 }
-                print(f"Finished processing {name}")
+                logging.info(f"Finished processing {name}")
                 
             except Exception as exc:
-                print(f"{source['name']} generated an exception: {exc}")
+                logging.error(f"{source['name']} generated an exception: {exc}")
+
+    # After all sources processed, perform a full cleanup of whitelisted items from the main DB
+    _cleanup_whitelisted_items_from_db()
 
     # Update global stats file once at the end
     current_stats["last_updated"] = datetime.now(timezone.utc).isoformat()

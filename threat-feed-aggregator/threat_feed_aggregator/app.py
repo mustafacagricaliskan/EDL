@@ -9,9 +9,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.interval import IntervalTrigger
 from flask_wtf.csrf import CSRFProtect
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import refactored modules
-from .aggregator import main as run_aggregator, aggregate_single_source
+from .aggregator import main as run_aggregator, aggregate_single_source, fetch_and_process_single_feed
 from .output_formatter import format_for_palo_alto, format_for_fortinet
 from .db_manager import init_db, get_all_indicators, get_unique_ip_count, get_whitelist, add_whitelist_item, remove_whitelist_item, delete_whitelisted_indicators
 from .cert_manager import generate_self_signed_cert, process_pfx_upload, get_cert_paths
@@ -86,6 +90,9 @@ def update_scheduled_jobs():
     """
     config = read_config()
     configured_sources = {source['name']: source for source in config.get('source_urls', [])}
+
+    # Clear all existing jobs before re-adding them based on current config
+    scheduler.remove_all_jobs()
 
     # Remove jobs that are no longer configured or whose schedule has changed
     for job in scheduler.get_jobs():
@@ -348,31 +355,7 @@ def remove_whitelist(item_id):
     remove_whitelist_item(item_id)
     return redirect(url_for('index'))
 
-def fetch_and_process_single_feed(source_config):
-    """
-    Fetches and processes data for a single threat feed source, updates DB and stats,
-    then updates the output files (Palo Alto, Fortinet) based on the current full DB.
-    """
-    name = source_config["name"]
-    print(f"Starting scheduled fetch for {name}...")
 
-    aggregate_single_source(source_config)
-
-    # Re-generate output files from SQLite DB
-    indicators_data = get_all_indicators()
-    processed_data = list(indicators_data.keys())
-
-    palo_alto_output = format_for_palo_alto(processed_data)
-    palo_alto_file_path = os.path.join(DATA_DIR, "palo_alto_edl.txt")
-    with open(palo_alto_file_path, "w") as f:
-        f.write(palo_alto_output)
-
-    fortinet_output = format_for_fortinet(processed_data)
-    fortinet_file_path = os.path.join(DATA_DIR, "fortinet_edl.txt")
-    with open(fortinet_file_path, "w") as f:
-        f.write(fortinet_output)
-    
-    print(f"Completed scheduled fetch for {name}.")
 
 def aggregation_task(update_status=True):
     """

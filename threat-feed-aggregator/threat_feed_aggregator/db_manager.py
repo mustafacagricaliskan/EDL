@@ -153,18 +153,21 @@ def remove_whitelist_item(item_id):
     finally:
         conn.close()
 
-def delete_whitelisted_indicators(whitelist_items):
+def delete_whitelisted_indicators(indicators_to_delete):
     """
-    Deletes indicators from the main table that match the whitelist items.
-    This is tricky with SQL directly if we have CIDRs in whitelist and IPs in indicators.
-    So we might need python logic for complex matching, but for exact matches SQL is fine.
-    We will handle complex logic (CIDR) in the aggregator/utils, but provides a direct delete for exact matches.
+    Deletes indicators from the main table that match the provided list of indicators.
     """
     conn = get_db_connection()
     try:
-        # Optimistic exact match deletion
-        conn.executemany('DELETE FROM indicators WHERE indicator = ?', [(item,) for item in whitelist_items])
-        conn.commit()
+        if indicators_to_delete:
+            placeholders = ','.join(['?' for _ in indicators_to_delete])
+            conn.execute(f'DELETE FROM indicators WHERE indicator IN ({placeholders})', indicators_to_delete)
+            conn.commit()
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"Error deleting whitelisted indicators: {e}")
+        return False
     finally:
         conn.close()
 

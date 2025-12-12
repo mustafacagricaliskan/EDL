@@ -3,8 +3,8 @@ import json
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .data_collector import fetch_data_from_url
-from .data_processor import process_data
-from .db_manager import remove_old_indicators, get_all_indicators
+from .db_manager import remove_old_indicators, get_all_indicators, get_whitelist
+from .utils import filter_whitelisted_items
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -46,10 +46,6 @@ def aggregate_single_source(source_config):
     data_format = source_config.get("format", "text")
     key_or_column = source_config.get("key_or_column")
 
-    # Note: remove_old_indicators calls are better handled centrally or periodically
-    # to avoid race conditions or redundant calls in threaded execution.
-    # We will remove it from here and let the main loop or scheduler handle it once.
-
     start_time_fetch = time.time()
     raw_data = fetch_data_from_url(url)
     end_time_fetch = time.time()
@@ -57,9 +53,37 @@ def aggregate_single_source(source_config):
 
     count = 0
     if raw_data:
-        count = process_data(raw_data, data_format, key_or_column)
+        # 1. Parse Data but don't insert yet (process_data modified logic needed or handle logic here)
+        # process_data currently inserts. We need to refactor process_data OR
+        # better: fetch raw items using parsers directly here, filter, then upsert.
+        # But to keep process_data usable, let's look at process_data.py
+        # It calls upsert_indicators_bulk.
+        
+        # We will import parsers here to separate parsing from insertion for filtering.
+        from .parsers import parse_text, parse_json, parse_csv
+        from .db_manager import upsert_indicators_bulk
+        
+        items = []
+        if data_format == "text":
+            items = parse_text(raw_data)
+        elif data_format == "json":
+            items = parse_json(raw_data, key=key_or_column)
+        elif data_format == "csv":
+            items = parse_csv(raw_data, column=key_or_column)
+            
+        # 2. Filter Whitelist
+        whitelist_db = get_whitelist()
+        whitelist_items = [w['item'] for w in whitelist_db]
+        
+        filtered_items = filter_whitelisted_items(items, whitelist_items)
+        
+        # 3. Upsert
+        if filtered_items:
+            upsert_indicators_bulk(filtered_items)
+            
+        count = len(filtered_items)
     
-    # Return stats data instead of writing to file directly to avoid race conditions
+    # Return stats data
     return {
         "name": name,
         "count": count,

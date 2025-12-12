@@ -13,7 +13,7 @@ from flask_wtf.csrf import CSRFProtect
 # Import refactored modules
 from .aggregator import main as run_aggregator, aggregate_single_source
 from .output_formatter import format_for_palo_alto, format_for_fortinet
-from .db_manager import init_db, get_all_indicators, get_unique_ip_count
+from .db_manager import init_db, get_all_indicators, get_unique_ip_count, get_whitelist, add_whitelist_item, remove_whitelist_item, delete_whitelisted_indicators
 from .cert_manager import generate_self_signed_cert, process_pfx_upload, get_cert_paths
 from .auth_manager import check_credentials
 
@@ -177,6 +177,9 @@ def index():
     # Get unique IP count from DB
     unique_ip_count = get_unique_ip_count()
     
+    # Get Whitelist
+    whitelist = get_whitelist()
+    
     local_tz = get_localzone()
 
     # Format timestamps
@@ -210,7 +213,7 @@ def index():
             'interval': f"{job.trigger.interval.total_seconds() / 60} minutes" if isinstance(job.trigger, IntervalTrigger) else 'N/A'
         })
 
-    return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template, unique_ip_count=unique_ip_count)
+    return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template, unique_ip_count=unique_ip_count, whitelist=whitelist)
 
 @app.route('/add', methods=['POST'])
 @login_required
@@ -317,12 +320,32 @@ def upload_cert():
         file_content = file.read()
         success, message = process_pfx_upload(file_content, password)
         if success:
-             # Just flash message, user needs to restart manually for now as reloading SSL context is complex
-             # in simplistic Flask run
              pass
-        # Ideally, we would want to display this message to the user, but we don't have flash messages in index.html yet.
-        # We can pass it as a query param or update index.html to show flashes.
-        # For simplicity, we'll just redirect.
+    return redirect(url_for('index'))
+
+# --- Whitelist Routes ---
+
+@app.route('/add_whitelist', methods=['POST'])
+@login_required
+def add_whitelist():
+    item = request.form.get('item')
+    description = request.form.get('description')
+    
+    if item:
+        success, message = add_whitelist_item(item, description)
+        if not success:
+            flash(f'Error: {message}')
+        else:
+            # Immediate Cleanup: If we add a whitelist item, we should remove it from indicators db
+            # This is a basic exact match cleanup. For CIDR, we'd need a heavier scan.
+            delete_whitelisted_indicators([item])
+            
+    return redirect(url_for('index'))
+
+@app.route('/remove_whitelist/<int:item_id>', methods=['GET']) # Using GET for simple link, POST better for safety
+@login_required
+def remove_whitelist(item_id):
+    remove_whitelist_item(item_id)
     return redirect(url_for('index'))
 
 def fetch_and_process_single_feed(source_config):

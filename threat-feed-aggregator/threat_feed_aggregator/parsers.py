@@ -1,6 +1,8 @@
 import json
 import csv
 from io import StringIO
+import re
+import ipaddress
 
 def parse_text(raw_data):
     """
@@ -30,6 +32,54 @@ def parse_csv(raw_data, column=0):
     """
     try:
         reader = csv.reader(StringIO(raw_data))
-        return [row[column] for row in reader if row]
+        # Skip empty rows or rows that might be headers
+        return [row[column].strip() for row in reader if row and len(row) > column and row[column].strip()]
     except (csv.Error, IndexError):
         return []
+
+def identify_indicator_type(indicator):
+    """
+    Identifies the type of the given indicator (IP, CIDR, Domain, URL, or Unknown).
+    """
+    indicator = indicator.strip()
+    if not indicator:
+        return "unknown"
+
+    # Check for IP address or CIDR
+    try:
+        if '/' in indicator:
+            ipaddress.ip_network(indicator, strict=False)
+            return "cidr"
+        else:
+            ipaddress.ip_address(indicator)
+            return "ip"
+    except ValueError:
+        pass # Not an IP or CIDR
+
+    # Check for URL
+    # A simple regex for URL, more robust checks might involve URL parsing libraries
+    if re.match(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", indicator):
+        return "url"
+
+    # Check for Domain (simple check: contains a dot, no spaces, not an IP, not a URL)
+    # This might catch some IPs as domains if IP check failed, but IP check is first.
+    if re.match(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$", indicator):
+         return "domain"
+
+    return "unknown"
+
+def parse_mixed_text(raw_data):
+    """
+    Parses mixed text data, identifying indicator types for each line.
+    Returns a list of tuples: (indicator_value, indicator_type).
+    """
+    parsed_items = []
+    lines = raw_data.splitlines()
+    for line in lines:
+        stripped_line = line.strip()
+        if not stripped_line or stripped_line.startswith('#'):
+            continue
+        
+        indicator_type = identify_indicator_type(stripped_line)
+        parsed_items.append((stripped_line, indicator_type))
+    return parsed_items

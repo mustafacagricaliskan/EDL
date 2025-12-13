@@ -14,8 +14,8 @@
             "schedule_interval_minutes": 120
         },
         {
-            "name": "urlhaus_ips",
-            "url": "https://urlhaus.abuse.ch/downloads/hostblock/",
+            "name": "usom",
+            "url": "https://www.usom.gov.tr/url-list.txt",
             "format": "text",
             "schedule_interval_minutes": 30
         },
@@ -29,7 +29,7 @@
     "auth": {
         "ldap": {
             "enabled": true,
-            "server": "ldap://openldap:389",
+            "server": "openldap",
             "domain": "dc=threataggregator,dc=local"
         }
     }

@@ -3,8 +3,8 @@ import json
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .data_collector import fetch_data_from_url
-from .parsers import parse_text, parse_json, parse_csv # Imported for direct parsing in aggregate_single_source
-from .db_manager import remove_old_indicators, get_all_indicators, get_whitelist, upsert_indicators_bulk, delete_whitelisted_indicators as db_delete_whitelisted_indicators # Alias to avoid conflict
+from .parsers import parse_text, parse_json, parse_csv, parse_mixed_text, identify_indicator_type # Updated imports
+from .db_manager import remove_old_indicators, get_all_indicators, get_whitelist, upsert_indicators_bulk, delete_whitelisted_indicators # Alias to avoid conflict
 from .utils import filter_whitelisted_items, is_ip_whitelisted # Import is_ip_whitelisted for cleanup
 from .geoip_manager import get_country_code # Import GeoIP
 import time
@@ -12,7 +12,7 @@ import ipaddress # For CIDR checks in cleanup
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Set to DEBUG for this module
+logger.setLevel(logging.INFO) # Set to INFO for this module
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(BASE_DIR, "threat_feed_aggregator", "config", "config.json") # Config remains in package
@@ -53,22 +53,29 @@ def _cleanup_whitelisted_items_from_db():
     whitelist_filters = [w['item'] for w in whitelist_db_items]
     
     if not whitelist_filters:
-        logging.info("Whitelist is empty, skipping cleanup.")
+        logger.info("Whitelist is empty, skipping cleanup.")
         return
 
     all_current_indicators_dict = get_all_indicators()
-    all_current_indicators_list = list(all_current_indicators_dict.keys())
-    logging.info(f"Total indicators before cleanup: {len(all_current_indicators_list)}")
+    
+    # Create a list of (indicator_value, indicator_type) for filtering
+    all_current_indicators_for_filtering = [(item, data['type']) for item, data in all_current_indicators_dict.items()]
+    
+    logger.info(f"Total indicators before cleanup: {len(all_current_indicators_for_filtering)}")
 
     # Filter out indicators that are in the whitelist
     indicators_to_delete = []
 
-    for indicator in all_current_indicators_list:
-        if is_ip_whitelisted(indicator, whitelist_filters):
+    for indicator, indicator_type in all_current_indicators_for_filtering:
+        # Whitelist filtering needs to be type-aware or more generic
+        # For simplicity, current is_ip_whitelisted is used, which works for IPs/CIDRs
+        # For domains/URLs, more advanced whitelisting logic might be needed
+        if indicator_type in ['ip', 'cidr'] and is_ip_whitelisted(indicator, whitelist_filters):
             indicators_to_delete.append(indicator)
+        # Add logic for other types if their whitelist filtering is different
     
     if indicators_to_delete:
-        logging.info(f"Attempting to delete {len(indicators_to_delete)} whitelisted items: {indicators_to_delete[:5]}...")
+        logger.info(f"Attempting to delete {len(indicators_to_delete)} whitelisted items: {indicators_to_delete[:5]}...")
         
         # Chunk deletion to avoid SQLite limits (typically 999 variables)
         chunk_size = 900
@@ -76,9 +83,9 @@ def _cleanup_whitelisted_items_from_db():
             chunk = indicators_to_delete[i:i + chunk_size]
             db_delete_whitelisted_indicators(chunk)
             
-        logging.info(f"Cleaned up {len(indicators_to_delete)} whitelisted items from main DB.")
+        logger.info(f"Cleaned up {len(indicators_to_delete)} whitelisted items from main DB.")
     else:
-        logging.info("No whitelisted items found in main DB for cleanup.")
+        logger.info("No whitelisted items found in main DB for cleanup.")
 
 
 def aggregate_single_source(source_config):
@@ -98,37 +105,52 @@ def aggregate_single_source(source_config):
 
     count = 0
     if raw_data:
-        items = []
+        items_with_type = []
+        
         if data_format == "text":
-            items = parse_text(raw_data)
+            # For "text" format, assume it might be mixed, so use parse_mixed_text
+            items_with_type = parse_mixed_text(raw_data)
         elif data_format == "json":
+            # For JSON, first parse then identify type
             items = parse_json(raw_data, key=key_or_column)
+            items_with_type = [(item, identify_indicator_type(item)) for item in items]
         elif data_format == "csv":
+            # For CSV, first parse then identify type
             items = parse_csv(raw_data, column=key_or_column)
+            items_with_type = [(item, identify_indicator_type(item)) for item in items]
             
-        # 2. Filter Whitelist
+        # Filter out empty or unknown types
+        items_with_type = [(item, item_type) for item, item_type in items_with_type if item and item_type != "unknown"]
+
+        # 2. Filter Whitelist - currently only supports IPs/CIDRs in is_ip_whitelisted
         whitelist_db = get_whitelist()
-        whitelist_items = [w['item'] for w in whitelist_db]
+        whitelist_filters = [w['item'] for w in whitelist_db]
         
-        filtered_items = filter_whitelisted_items(items, whitelist_items)
+        filtered_items_with_type = []
+        for item, item_type in items_with_type:
+            if item_type in ['ip', 'cidr']:
+                if not is_ip_whitelisted(item, whitelist_filters):
+                    filtered_items_with_type.append((item, item_type))
+            else: # For other types, no whitelisting currently applies
+                filtered_items_with_type.append((item, item_type))
         
-        # 3. Enrich with GeoIP
-        enriched_items = []
-        for item in filtered_items:
+        # 3. Enrich with GeoIP (only for IPs) and prepare for upsert
+        data_for_upsert = []
+        for item, item_type in filtered_items_with_type:
             country = None
-            try:
-                # Only attempt GeoIP lookup for single IP addresses, not CIDRs
-                if '/' not in item:
+            if item_type == 'ip':
+                try:
                     country = get_country_code(item)
-            except Exception as e:
-                logger.debug(f"Error enriching {item} with GeoIP: {e}")
-            enriched_items.append((item, country))
+                except Exception as e:
+                    logger.debug(f"Error enriching {item} with GeoIP: {e}")
+            
+            data_for_upsert.append((item, country, item_type))
 
         # 4. Upsert
-        if enriched_items:
-            upsert_indicators_bulk(enriched_items)
+        if data_for_upsert:
+            upsert_indicators_bulk(data_for_upsert)
             
-        count = len(enriched_items)
+        count = len(data_for_upsert)
     
     # Return stats data
     return {
@@ -145,7 +167,7 @@ def fetch_and_process_single_feed(source_config):
     This function is designed to be run by the scheduler for individual sources.
     """
     name = source_config["name"]
-    print(f"Starting scheduled fetch for {name}...")
+    logger.info(f"Starting scheduled fetch for {name}...")
 
     # Call the single source aggregation function
     aggregate_single_source(source_config)
@@ -156,7 +178,9 @@ def fetch_and_process_single_feed(source_config):
     # After updating a single source, re-generate the full output files
     # This requires reading the entire indicators_db
     indicators_data = get_all_indicators()
-    processed_data = list(indicators_data.keys())
+    
+    # We only output IP and CIDR for EDLs generally
+    processed_data = [item for item, data in indicators_data.items() if data['type'] in ['ip', 'cidr']]
 
     from .output_formatter import format_for_palo_alto, format_for_fortinet # Import locally to avoid circular
 
@@ -172,7 +196,7 @@ def fetch_and_process_single_feed(source_config):
     with open(fortinet_file_path, "w") as f:
         f.write(fortinet_output)
     
-    print(f"Completed scheduled fetch for {name}.")
+    logger.info(f"Completed scheduled fetch for {name}.")
 
 def main(source_urls):
     """
@@ -209,10 +233,10 @@ def main(source_urls):
                     "count": result["count"],
                     "fetch_time": result["fetch_time"]
                 }
-                logging.info(f"Finished processing {name}")
+                logger.info(f"Finished processing {name}")
                 
             except Exception as exc:
-                logging.error(f"{source['name']} generated an exception: {exc}")
+                logger.error(f"{source['name']} generated an exception: {exc}")
 
     # After all sources processed, perform a full cleanup of whitelisted items from the main DB
     _cleanup_whitelisted_items_from_db()

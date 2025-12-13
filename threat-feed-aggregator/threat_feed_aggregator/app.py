@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from functools import wraps
 
 # Configure root logger immediately
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 
 from flask import Flask, render_template, redirect, url_for, send_from_directory, request, jsonify, session, flash
 from tzlocal import get_localzone
@@ -18,13 +18,33 @@ from flask_wtf.csrf import CSRFProtect
 # Import refactored modules
 from .aggregator import main as run_aggregator, aggregate_single_source, fetch_and_process_single_feed
 from .output_formatter import format_for_palo_alto, format_for_fortinet
-from .db_manager import init_db, get_all_indicators, get_unique_ip_count, get_whitelist, add_whitelist_item, remove_whitelist_item, delete_whitelisted_indicators, get_country_stats
+from .db_manager import (
+    init_db,
+    get_all_indicators,
+    get_unique_ip_count,
+    get_whitelist,
+    add_whitelist_item,
+    remove_whitelist_item,
+    delete_whitelisted_indicators,
+    get_country_stats,
+    set_admin_password,
+    check_admin_credentials,
+    get_admin_password_hash
+)
 from .cert_manager import generate_self_signed_cert, process_pfx_upload, get_cert_paths
 from .auth_manager import check_credentials
 
 app = Flask(__name__)
-# Use environment variable for secret key, fallback for dev
-app.secret_key = os.environ.get('SECRET_KEY', 'a_very_secret_and_static_key_for_testing_do_not_use_in_production')
+
+# Validate essential environment variables
+SECRET_KEY = os.environ.get('SECRET_KEY')
+ADMIN_PASSWORD_ENV = os.environ.get('ADMIN_PASSWORD')
+
+if not SECRET_KEY:
+    logging.error("Environment variable 'SECRET_KEY' is not set. Please set it for production use.")
+    SECRET_KEY = 'a_very_secret_and_static_key_for_testing_do_not_use_in_production' # Fallback for dev
+    
+app.secret_key = SECRET_KEY
 app.config['SESSION_COOKIE_NAME'] = 'threat_feed_aggregator_session'
 
 # SECURITY HARDENING
@@ -62,6 +82,17 @@ AGGREGATION_STATUS = "idle"  # idle, running, completed
 # Initialize Database
 init_db()
 
+# Initialize admin password from ENV if DB is empty
+if ADMIN_PASSWORD_ENV:
+    if not get_admin_password_hash(): # Check if admin password exists in DB
+        success, msg = set_admin_password(ADMIN_PASSWORD_ENV)
+        if success:
+            logging.info("Admin password initialized from ADMIN_PASSWORD environment variable.")
+        else:
+            logging.error(f"Failed to set initial admin password from ENV: {msg}")
+else:
+    logging.warning("Environment variable 'ADMIN_PASSWORD' is not set. Please set it for initial admin setup or change it via GUI.")
+
 # Ensure SSL Certificates exist
 generate_self_signed_cert()
 
@@ -94,21 +125,6 @@ def update_scheduled_jobs():
 
     # Clear all existing jobs before re-adding them based on current config
     scheduler.remove_all_jobs()
-
-    # Remove jobs that are no longer configured or whose schedule has changed
-    for job in scheduler.get_jobs():
-        if not job.args or 'name' not in job.args[0]:
-            continue
-
-        job_source_name = job.args[0]['name']
-        current_interval = None
-        if isinstance(job.trigger, IntervalTrigger):
-            current_interval = job.trigger.interval.total_seconds() / 60
-
-        if job_source_name not in configured_sources or \
-           configured_sources[job_source_name].get('schedule_interval_minutes') != current_interval:
-            scheduler.remove_job(job.id)
-            print(f"Removed scheduled job for {job_source_name}.")
 
     # Add or update jobs for configured sources
     for source_name, source_config in configured_sources.items():
@@ -299,7 +315,7 @@ def update_settings():
 @app.route('/update_ldap_settings', methods=['POST'])
 @login_required
 def update_ldap_settings():
-    server = request.form.get('ldap_server')
+    server = request.form.get('ldap_server').replace('ldap://', '')
     domain = request.form.get('ldap_domain')
     enabled = request.form.get('ldap_enabled') == 'on'
     
@@ -362,7 +378,31 @@ def remove_whitelist(item_id):
     remove_whitelist_item(item_id)
     return redirect(url_for('index'))
 
+@app.route('/change_admin_password', methods=['POST'])
+@login_required
+def change_admin_password():
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_new_password = request.form.get('confirm_new_password')
 
+    if not check_admin_credentials(current_password):
+        flash('Current password is incorrect.', 'danger')
+        return redirect(url_for('index'))
+    
+    if not new_password or new_password != confirm_new_password:
+        flash('New passwords do not match or are empty.', 'danger')
+        return redirect(url_for('index'))
+    
+    # Update password in DB
+    success, message = set_admin_password(new_password)
+    if success:
+        flash('Admin password updated successfully. Please re-login with your new password.', 'success')
+        session.pop('logged_in', None)
+        session.pop('username', None)
+        return redirect(url_for('login'))
+    else:
+        flash(f'Error updating password: {message}', 'danger')
+        return redirect(url_for('index'))
 
 def aggregation_task(update_status=True):
     """
@@ -425,14 +465,3 @@ def status():
 @login_required
 def download_file(filename):
     return send_from_directory(DATA_DIR, filename, as_attachment=True)
-
-# Start scheduler when app loads (for Gunicorn support with single worker)
-# Note: With multiple workers, this would cause duplicate jobs.
-if not scheduler.running:
-    scheduler.start()
-    update_scheduled_jobs()
-
-if __name__ == '__main__':
-    cert_file, key_file = get_cert_paths()
-    # Enable SSL
-    app.run(debug=True, use_reloader=False, ssl_context=(cert_file, key_file), host='0.0.0.0', port=443)

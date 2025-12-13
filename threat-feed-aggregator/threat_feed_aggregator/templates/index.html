@@ -411,6 +411,35 @@
                         </form>
                     </div>
                 </div>
+
+                <!-- Admin Password Card -->
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0"><i class="fa-solid fa-key me-2 text-danger"></i>Admin Password</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/change_admin_password" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <div class="mb-3">
+                                <label for="current_password" class="form-label small">Current Password</label>
+                                <input type="password" id="current_password" name="current_password" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="new_password" class="form-label small">New Password</label>
+                                <input type="password" id="new_password" name="new_password" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="confirm_new_password" class="form-label small">Confirm New Password</label>
+                                <input type="password" id="confirm_new_password" name="confirm_new_password" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="fa-solid fa-edit me-1"></i>Change Password
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
                 
                 <div class="text-center text-muted mt-3">
                     <small>Threat Feed Aggregator v1.0</small>

@@ -2,6 +2,9 @@ import sqlite3
 import logging
 from datetime import datetime, timezone
 import os
+from werkzeug.security import generate_password_hash, check_password_hash
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -21,7 +24,8 @@ def init_db():
         conn.execute('''
             CREATE TABLE IF NOT EXISTS indicators (
                 indicator TEXT PRIMARY KEY,
-                last_seen TEXT NOT NULL
+                last_seen TEXT NOT NULL,
+                country TEXT
             )
         ''')
         
@@ -31,9 +35,9 @@ def init_db():
         if 'country' not in columns:
             try:
                 conn.execute('ALTER TABLE indicators ADD COLUMN country TEXT')
-                logging.info("Added 'country' column to indicators table.")
+                logger.info("Added 'country' column to indicators table.")
             except Exception as e:
-                logging.error(f"Error adding country column: {e}")
+                logger.error(f"Error adding country column: {e}")
 
         # Create Whitelist Table
         conn.execute('''
@@ -44,11 +48,51 @@ def init_db():
                 added_at TEXT NOT NULL
             )
         ''')
+
+        # Create Users Table for admin password
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                password_hash TEXT NOT NULL
+            )
+        ''')
+        
         conn.commit()
     except Exception as e:
-        logging.error(f"Error initializing database: {e}")
+        logger.error(f"Error initializing database: {e}")
     finally:
         conn.close()
+
+# --- User Management Functions ---
+def set_admin_password(password):
+    conn = get_db_connection()
+    try:
+        hashed_password = generate_password_hash(password)
+        conn.execute('INSERT OR REPLACE INTO users (username, password_hash) VALUES (?, ?)', 
+                     ('admin', hashed_password))
+        conn.commit()
+        logger.info("Admin password set/updated successfully.")
+        return True, "Admin password set/updated."
+    except Exception as e:
+        logger.error(f"Error setting admin password: {e}")
+        return False, str(e)
+    finally:
+        conn.close()
+
+def get_admin_password_hash():
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute("SELECT password_hash FROM users WHERE username = 'admin'")
+        result = cursor.fetchone()
+        return result['password_hash'] if result else None
+    finally:
+        conn.close()
+
+def check_admin_credentials(password):
+    stored_hash = get_admin_password_hash()
+    if stored_hash and check_password_hash(stored_hash, password):
+        return True
+    return False
 
 def upsert_indicator(indicator):
     """Inserts a new indicator or updates the last_seen timestamp if it exists."""

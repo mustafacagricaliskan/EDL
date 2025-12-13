@@ -16,9 +16,9 @@
     ],
     "auth": {
         "ldap": {
-            "enabled": false,
-            "server": "",
-            "domain": ""
+            "enabled": true,
+            "server": "ldap://openldap:389",
+            "domain": "dc=threataggregator,dc=local"
         }
     }
 }

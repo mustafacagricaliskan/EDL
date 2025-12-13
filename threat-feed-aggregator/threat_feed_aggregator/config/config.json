@@ -12,6 +12,18 @@
             "url": "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level2.netset",
             "format": "text",
             "schedule_interval_minutes": 120
+        },
+        {
+            "name": "urlhaus_ips",
+            "url": "https://urlhaus.abuse.ch/downloads/hostblock/",
+            "format": "text",
+            "schedule_interval_minutes": 30
+        },
+        {
+            "name": "feodo_ips",
+            "url": "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
+            "format": "text",
+            "schedule_interval_minutes": 60
         }
     ],
     "auth": {

@@ -272,6 +272,7 @@
                         <div class="d-grid gap-2">
                             <a href="{{ url_for('download_file', filename='palo_alto_edl.txt') }}" class="btn btn-outline-primary text-start"><i class="fas fa-file-alt me-2"></i> Palo Alto EDL</a>
                             <a href="{{ url_for('download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-primary text-start"><i class="fas fa-file-alt me-2"></i> Fortinet EDL</a>
+                            <a href="{{ url_for('download_file', filename='url_list.txt') }}" class="btn btn-outline-info text-start"><i class="fas fa-link me-2"></i> URL List</a>
                         </div>
                     </div>
                 </div>
@@ -563,6 +564,32 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while clearing history.');
+            });
+        }
+
+        function regenerateLists() {
+            if(!confirm('This will regenerate the Palo Alto and Fortinet EDL files based on the current database content. Continue?')) return;
+            
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+            fetch('/api/regenerate_lists', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    alert('Lists regenerated successfully!');
+                } else {
+                    alert('Error regenerating lists: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while regenerating lists.');
             });
         }
 

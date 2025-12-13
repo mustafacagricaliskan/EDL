@@ -33,3 +33,21 @@ def format_for_fortinet(indicator_dict):
         if details.get('type') in ['ip', 'cidr']:
             items.append(indicator)
     return "\n".join(items)
+
+def format_for_url_list(indicator_dict):
+    """
+    Formats a dictionary of indicators for a URL/Domain list.
+    Includes only 'url' and 'domain' types.
+
+    Args:
+        indicator_dict (dict): A dictionary of indicators with their details.
+
+    Returns:
+        str: A string with one URL/Domain per line.
+    """
+    items = []
+    for indicator, details in indicator_dict.items():
+        if details.get('type') in ['url', 'domain']:
+            items.append(indicator)
+    return "\n".join(items)
+

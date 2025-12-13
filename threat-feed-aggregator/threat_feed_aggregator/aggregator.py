@@ -61,14 +61,14 @@ def _cleanup_whitelisted_items_from_db():
 
 def regenerate_edl_files():
     """
-    Regenerates the Palo Alto and Fortinet EDL text files based on the current
+    Regenerates the Palo Alto, Fortinet EDL, and URL List text files based on the current
     content of the indicators database.
     """
     logger.info("Regenerating EDL files from database...")
     try:
         indicators_data = get_all_indicators()
         
-        from .output_formatter import format_for_palo_alto, format_for_fortinet
+        from .output_formatter import format_for_palo_alto, format_for_fortinet, format_for_url_list
 
         palo_alto_output = format_for_palo_alto(indicators_data)
         with open(os.path.join(DATA_DIR, "palo_alto_edl.txt"), "w") as f:
@@ -77,6 +77,10 @@ def regenerate_edl_files():
         fortinet_output = format_for_fortinet(indicators_data)
         with open(os.path.join(DATA_DIR, "fortinet_edl.txt"), "w") as f:
             f.write(fortinet_output)
+
+        url_list_output = format_for_url_list(indicators_data)
+        with open(os.path.join(DATA_DIR, "url_list.txt"), "w") as f:
+            f.write(url_list_output)
             
         logger.info("EDL files regenerated successfully.")
         return True, "Lists regenerated successfully."
@@ -210,7 +214,7 @@ def fetch_and_process_single_feed(source_config):
     try:
         aggregate_single_source(source_config)
         _cleanup_whitelisted_items_from_db()
-        regenerate_edl_files() # Use the new function
+        regenerate_edl_files() 
         logger.info(f"Completed scheduled fetch for {name}.")
     except Exception as e:
         logger.error(f"Scheduled fetch failed for {name}: {e}")
@@ -257,5 +261,5 @@ def main(source_urls):
     current_stats["last_updated"] = datetime.now(timezone.utc).isoformat()
     write_stats(current_stats)
 
-    regenerate_edl_files() # Use the new function
-    return {"url_counts": all_url_counts, "processed_data": []} # Return empty list to save memory
+    regenerate_edl_files() 
+    return {"url_counts": all_url_counts, "processed_data": []} 

@@ -83,7 +83,8 @@ def aggregate_single_source(source_config):
             items_with_type = []
             
             if data_format == "text":
-                items_with_type = parse_mixed_text(raw_data)
+                # Pass source name for logging inside parser
+                items_with_type = parse_mixed_text(raw_data, source_name=name)
             elif data_format == "json":
                 items = parse_json(raw_data, key=key_or_column)
                 items_with_type = [(item, identify_indicator_type(item)) for item in items]
@@ -106,21 +107,55 @@ def aggregate_single_source(source_config):
                 else: 
                     filtered_items_with_type.append((item, item_type))
             
-            update_job_status(name, "Enriching", f"Performing GeoIP lookup for {len(filtered_items_with_type)} items...")
-            
+            # --- GeoIP Enrichment (Batch) ---
+            update_job_status(name, "Enriching", f"Enriching {len(filtered_items_with_type)} items...")
             data_for_upsert = []
-            for item, item_type in filtered_items_with_type:
+            total_items = len(filtered_items_with_type)
+            
+            for i, (item, item_type) in enumerate(filtered_items_with_type):
                 country = None
                 if item_type == 'ip':
                     try:
                         country = get_country_code(item)
-                    except Exception as e:
+                    except Exception:
                         pass
                 data_for_upsert.append((item, country, item_type))
+                
+                # Progress update for enrichment
+                if (i + 1) % 10000 == 0:
+                     update_job_status(name, "Enriching", f"Enriched {i + 1}/{total_items} items...")
 
+            # --- DB Upsert (Batch) ---
             if data_for_upsert:
-                update_job_status(name, "Saving", f"Writing {len(data_for_upsert)} items to DB...")
-                upsert_indicators_bulk(data_for_upsert)
+                batch_size = 5000
+                total_batches = (len(data_for_upsert) + batch_size - 1) // batch_size
+                
+                logger.info(f"[{name}] Starting DB upsert for {len(data_for_upsert)} items in {total_batches} batches.")
+                update_job_status(name, "Saving", f"Writing {len(data_for_upsert)} items (0/{total_batches} batches)...")
+                
+                for i in range(0, len(data_for_upsert), batch_size):
+                    batch = data_for_upsert[i:i + batch_size]
+                    current_batch_num = (i // batch_size) + 1
+                    
+                    # Retry mechanism for DB lock
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            upsert_indicators_bulk(batch)
+                            
+                            # Log and Update Status
+                            msg = f"Written batch {current_batch_num}/{total_batches} ({len(batch)} items)"
+                            logger.info(f"[{name}] {msg}")
+                            update_job_status(name, "Saving", msg)
+                            break # Success, exit retry loop
+                        except Exception as e:
+                            if attempt < max_retries - 1:
+                                logger.warning(f"[{name}] Error writing batch {current_batch_num} (Attempt {attempt+1}): {e}. Retrying...")
+                                time.sleep(2 * (attempt + 1)) # Exponential backoff
+                            else:
+                                logger.error(f"[{name}] Failed to write batch {current_batch_num} after {max_retries} attempts: {e}")
+                                # Don't raise here to allow other batches to proceed, but log error
+
                 
             count = len(data_for_upsert)
             
@@ -137,8 +172,6 @@ def aggregate_single_source(source_config):
         update_job_status(name, "Failed", str(e))
         raise # Re-raise for ThreadPoolExecutor to catch
     finally:
-        # Keep status for a bit so UI can see it, then clear (or rely on UI history)
-        # We will keep it in CURRENT_JOB_STATUS but mark as completed/failed
         pass
 
     return {
@@ -173,7 +206,6 @@ def fetch_and_process_single_feed(source_config):
     except Exception as e:
         logger.error(f"Scheduled fetch failed for {name}: {e}")
     finally:
-        # Ideally clear status after some time, or let next run overwrite
         pass
 
 def main(source_urls):

@@ -77,8 +77,8 @@
             <div class="col-md-3">
                 <div class="card text-center text-success">
                     <div class="card-body">
-                        <h6>UNIQUE IPs</h6>
-                        <h2 class="display-4 fw-bold">{{ indicator_counts_by_type.get('ip', 0) }}</h2>
+                        <h6>IPs / CIDRs</h6>
+                        <h2 class="display-4 fw-bold">{{ indicator_counts_by_type.get('ip', 0) + indicator_counts_by_type.get('cidr', 0) }}</h2>
                     </div>
                 </div>
             </div>
@@ -198,7 +198,12 @@
 
                 <!-- Job History Table -->
                 <div class="card mt-4">
-                    <div class="card-header"><i class="fas fa-history me-2"></i> Job History & Logs (Last 20)</div>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-history me-2"></i> Job History & Logs (Last 20)</span>
+                        <button class="btn btn-sm btn-outline-danger" onclick="clearJobHistory()">
+                            <i class="fas fa-trash-alt me-1"></i> Clear History
+                        </button>
+                    </div>
                     <div class="card-body p-0">
                         <table class="table table-striped table-hover mb-0" style="font-size: 0.9em;">
                             <thead>
@@ -527,6 +532,33 @@
                         tbody.innerHTML += row;
                     });
                 });
+        }
+
+        function clearJobHistory() {
+            if(!confirm('Are you sure you want to clear the entire job history? This cannot be undone.')) return;
+            
+            // Get CSRF token from one of the forms
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+            fetch('/api/history/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    fetchJobHistory(); // Refresh table
+                } else {
+                    alert('Error clearing history: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while clearing history.');
+            });
         }
 
         function runAggregation() {

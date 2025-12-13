@@ -2,6 +2,7 @@ import sqlite3
 import logging
 from datetime import datetime, timezone
 import os
+import threading
 from werkzeug.security import generate_password_hash, check_password_hash
 
 logger = logging.getLogger(__name__)
@@ -10,109 +11,118 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_NAME = os.path.join(DATA_DIR, "threat_feed.db")
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
+# Global Lock for DB Writes to prevent SQLite Locking errors
+DB_WRITE_LOCK = threading.Lock()
+
+def get_db_connection(timeout=30.0):
+    """
+    Creates a database connection with extended timeout.
+    """
+    conn = sqlite3.connect(DB_NAME, timeout=timeout)
     conn.execute('PRAGMA journal_mode=WAL;')
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
     """Initializes the database with the necessary tables."""
-    conn = get_db_connection()
-    try:
-        # Create indicators table if not exists
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS indicators (
-                indicator TEXT PRIMARY KEY,
-                last_seen TEXT NOT NULL,
-                country TEXT,
-                type TEXT NOT NULL DEFAULT 'ip'
-            )
-        ''')
-        
-        # Check schemas (simplified for brevity, ensuring columns exist)
-        cursor = conn.execute("PRAGMA table_info(indicators)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'country' not in columns:
-            try: conn.execute('ALTER TABLE indicators ADD COLUMN country TEXT')
-            except Exception: pass
-        if 'type' not in columns:
-            try: conn.execute("ALTER TABLE indicators ADD COLUMN type TEXT NOT NULL DEFAULT 'ip'")
-            except Exception: pass
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            # Create indicators table if not exists
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS indicators (
+                    indicator TEXT PRIMARY KEY,
+                    last_seen TEXT NOT NULL,
+                    country TEXT,
+                    type TEXT NOT NULL DEFAULT 'ip'
+                )
+            ''')
+            
+            # Check schemas
+            cursor = conn.execute("PRAGMA table_info(indicators)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if 'country' not in columns:
+                try: conn.execute('ALTER TABLE indicators ADD COLUMN country TEXT')
+                except Exception: pass
+            if 'type' not in columns:
+                try: conn.execute("ALTER TABLE indicators ADD COLUMN type TEXT NOT NULL DEFAULT 'ip'")
+                except Exception: pass
 
-        # Create Whitelist Table
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS whitelist (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                item TEXT NOT NULL UNIQUE,
-                description TEXT,
-                added_at TEXT NOT NULL
-            )
-        ''')
+            # Create Whitelist Table
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS whitelist (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    item TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    added_at TEXT NOT NULL
+                )
+            ''')
 
-        # Create Users Table
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY,
-                password_hash TEXT NOT NULL
-            )
-        ''')
+            # Create Users Table
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    username TEXT PRIMARY KEY,
+                    password_hash TEXT NOT NULL
+                )
+            ''')
 
-        # Create Job History Table (NEW)
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS job_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source_name TEXT NOT NULL,
-                start_time TEXT NOT NULL,
-                end_time TEXT,
-                status TEXT NOT NULL, -- 'running', 'success', 'failure'
-                items_processed INTEGER DEFAULT 0,
-                message TEXT
-            )
-        ''')
-        
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Error initializing database: {e}")
-    finally:
-        conn.close()
+            # Create Job History Table
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS job_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_name TEXT NOT NULL,
+                    start_time TEXT NOT NULL,
+                    end_time TEXT,
+                    status TEXT NOT NULL, -- 'running', 'success', 'failure'
+                    items_processed INTEGER DEFAULT 0,
+                    message TEXT
+                )
+            ''')
+            
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error initializing database: {e}")
+        finally:
+            conn.close()
 
-# --- Job History Functions (NEW) ---
+# --- Job History Functions ---
 
 def log_job_start(source_name):
     """Starts a new job log entry."""
-    conn = get_db_connection()
-    try:
-        start_time = datetime.now(timezone.utc).isoformat()
-        cursor = conn.execute(
-            'INSERT INTO job_history (source_name, start_time, status) VALUES (?, ?, ?)',
-            (source_name, start_time, 'running')
-        )
-        conn.commit()
-        return cursor.lastrowid
-    except Exception as e:
-        logger.error(f"Error logging job start: {e}")
-        return None
-    finally:
-        conn.close()
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            start_time = datetime.now(timezone.utc).isoformat()
+            cursor = conn.execute(
+                'INSERT INTO job_history (source_name, start_time, status) VALUES (?, ?, ?)',
+                (source_name, start_time, 'running')
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            logger.error(f"Error logging job start: {e}")
+            return None
+        finally:
+            conn.close()
 
 def log_job_end(job_id, status, items_processed=0, message=None):
     """Updates a job log entry with completion details."""
     if not job_id:
         return
-    conn = get_db_connection()
-    try:
-        end_time = datetime.now(timezone.utc).isoformat()
-        conn.execute('''
-            UPDATE job_history 
-            SET end_time = ?, status = ?, items_processed = ?, message = ?
-            WHERE id = ?
-        ''', (end_time, status, items_processed, message, job_id))
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Error logging job end: {e}")
-    finally:
-        conn.close()
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            end_time = datetime.now(timezone.utc).isoformat()
+            conn.execute('''
+                UPDATE job_history 
+                SET end_time = ?, status = ?, items_processed = ?, message = ?
+                WHERE id = ?
+            ''', (end_time, status, items_processed, message, job_id))
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error logging job end: {e}")
+        finally:
+            conn.close()
 
 def get_job_history(limit=50):
     """Retrieves recent job history."""
@@ -123,20 +133,35 @@ def get_job_history(limit=50):
     finally:
         conn.close()
 
+def clear_job_history():
+    """Deletes all records from job history."""
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            conn.execute('DELETE FROM job_history')
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing job history: {e}")
+            return False
+        finally:
+            conn.close()
+
 # --- User Management Functions ---
 def set_admin_password(password):
-    conn = get_db_connection()
-    try:
-        hashed_password = generate_password_hash(password)
-        conn.execute('INSERT OR REPLACE INTO users (username, password_hash) VALUES (?, ?)', 
-                     ('admin', hashed_password))
-        conn.commit()
-        return True, "Admin password set/updated."
-    except Exception as e:
-        logger.error(f"Error setting admin password: {e}")
-        return False, str(e)
-    finally:
-        conn.close()
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            hashed_password = generate_password_hash(password)
+            conn.execute('INSERT OR REPLACE INTO users (username, password_hash) VALUES (?, ?)', 
+                         ('admin', hashed_password))
+            conn.commit()
+            return True, "Admin password set/updated."
+        except Exception as e:
+            logger.error(f"Error setting admin password: {e}")
+            return False, str(e)
+        finally:
+            conn.close()
 
 def get_admin_password_hash():
     conn = get_db_connection()
@@ -154,61 +179,64 @@ def check_admin_credentials(password):
     return False
 
 def upsert_indicators_bulk(indicators):
-    conn = get_db_connection()
-    try:
-        now_iso = datetime.now(timezone.utc).isoformat()
-        data = []
-        for item, country, indicator_type in indicators:
-            data.append((item, now_iso, country, indicator_type))
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            data = []
+            for item, country, indicator_type in indicators:
+                data.append((item, now_iso, country, indicator_type))
 
-        conn.executemany('''
-            INSERT INTO indicators (indicator, last_seen, country, type)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(indicator) DO UPDATE SET
-                last_seen = excluded.last_seen,
-                country = COALESCE(excluded.country, indicators.country),
-                type = excluded.type
-        ''', data)
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Error bulk upserting indicators: {e}")
-        raise # Re-raise to catch in aggregator
-    finally:
-        conn.close()
+            conn.executemany('''
+                INSERT INTO indicators (indicator, last_seen, country, type)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(indicator) DO UPDATE SET
+                    last_seen = excluded.last_seen,
+                    country = COALESCE(excluded.country, indicators.country),
+                    type = excluded.type
+            ''', data)
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error bulk upserting indicators: {e}")
+            raise 
+        finally:
+            conn.close()
 
 def get_all_indicators():
     conn = get_db_connection()
     try:
         cursor = conn.execute('SELECT indicator, last_seen, country, type FROM indicators')
+        # Optimized: Fetching large dataset can be slow, but this is read-only
         return {row['indicator']: {'last_seen': row['last_seen'], 'country': row['country'], 'type': row['type']} for row in cursor.fetchall()}
     finally:
         conn.close()
 
 def remove_old_indicators(lifetime_days):
-    conn = get_db_connection()
-    try:
-        cursor = conn.execute('SELECT indicator, last_seen FROM indicators')
-        to_delete = []
-        now = datetime.now(timezone.utc)
-        
-        for row in cursor:
-            try:
-                last_seen = datetime.fromisoformat(row['last_seen'])
-                if (now - last_seen).days > lifetime_days:
-                    to_delete.append(row['indicator'])
-            except ValueError:
-                pass
-                
-        if to_delete:
-            conn.executemany('DELETE FROM indicators WHERE indicator = ?', [(x,) for x in to_delete])
-            conn.commit()
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            cursor = conn.execute('SELECT indicator, last_seen FROM indicators')
+            to_delete = []
+            now = datetime.now(timezone.utc)
             
-        return len(to_delete)
-    except Exception as e:
-        logger.error(f"Error removing old indicators: {e}")
-        return 0
-    finally:
-        conn.close()
+            for row in cursor:
+                try:
+                    last_seen = datetime.fromisoformat(row['last_seen'])
+                    if (now - last_seen).days > lifetime_days:
+                        to_delete.append(row['indicator'])
+                except ValueError:
+                    pass
+                    
+            if to_delete:
+                conn.executemany('DELETE FROM indicators WHERE indicator = ?', [(x,) for x in to_delete])
+                conn.commit()
+                
+            return len(to_delete)
+        except Exception as e:
+            logger.error(f"Error removing old indicators: {e}")
+            return 0
+        finally:
+            conn.close()
 
 def get_unique_indicator_count(indicator_type=None):
     conn = get_db_connection()
@@ -250,20 +278,21 @@ def get_country_stats():
 # --- Whitelist Functions ---
 
 def add_whitelist_item(item, description=""):
-    conn = get_db_connection()
-    try:
-        now_iso = datetime.now(timezone.utc).isoformat()
-        conn.execute('INSERT INTO whitelist (item, description, added_at) VALUES (?, ?, ?)', 
-                     (item.strip(), description, now_iso))
-        conn.commit()
-        return True, "Item added to whitelist."
-    except sqlite3.IntegrityError:
-        return False, "Item already in whitelist."
-    except Exception as e:
-        logger.error(f"Error adding to whitelist: {e}")
-        return False, str(e)
-    finally:
-        conn.close()
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            conn.execute('INSERT INTO whitelist (item, description, added_at) VALUES (?, ?, ?)', 
+                         (item.strip(), description, now_iso))
+            conn.commit()
+            return True, "Item added to whitelist."
+        except sqlite3.IntegrityError:
+            return False, "Item already in whitelist."
+        except Exception as e:
+            logger.error(f"Error adding to whitelist: {e}")
+            return False, str(e)
+        finally:
+            conn.close()
 
 def get_whitelist():
     conn = get_db_connection()
@@ -274,28 +303,30 @@ def get_whitelist():
         conn.close()
 
 def remove_whitelist_item(item_id):
-    conn = get_db_connection()
-    try:
-        conn.execute('DELETE FROM whitelist WHERE id = ?', (item_id,))
-        conn.commit()
-        return True
-    except Exception as e:
-        logger.error(f"Error removing from whitelist: {e}")
-        return False
-    finally:
-        conn.close()
-
-def delete_whitelisted_indicators(items_to_delete):
-    conn = get_db_connection()
-    try:
-        if items_to_delete:
-            placeholders = ','.join(['?' for _ in items_to_delete])
-            conn.execute(f'DELETE FROM indicators WHERE indicator IN ({placeholders})', items_to_delete)
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            conn.execute('DELETE FROM whitelist WHERE id = ?', (item_id,))
             conn.commit()
             return True
-        return False
-    except Exception as e:
-        logger.error(f"Error deleting whitelisted indicators: {e}")
-        return False
-    finally:
-        conn.close()
+        except Exception as e:
+            logger.error(f"Error removing from whitelist: {e}")
+            return False
+        finally:
+            conn.close()
+
+def delete_whitelisted_indicators(items_to_delete):
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            if items_to_delete:
+                placeholders = ','.join(['?' for _ in items_to_delete])
+                conn.execute(f'DELETE FROM indicators WHERE indicator IN ({placeholders})', items_to_delete)
+                conn.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting whitelisted indicators: {e}")
+            return False
+        finally:
+            conn.close()

@@ -5,8 +5,7 @@ import threading
 from datetime import datetime, timezone
 from functools import wraps
 
-# --- LOGGING SETUP ---
-# Configure basic logging first
+# Configure root logger immediately
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 
 from flask import Flask, render_template, redirect, url_for, send_from_directory, request, jsonify, session, flash
@@ -32,11 +31,12 @@ from .db_manager import (
     check_admin_credentials,
     get_admin_password_hash,
     get_indicator_counts_by_type,
-    get_job_history
+    get_job_history,
+    clear_job_history # NEW IMPORT
 )
 from .cert_manager import generate_self_signed_cert, process_pfx_upload, get_cert_paths
 from .auth_manager import check_credentials
-from .log_manager import setup_memory_logging, get_live_logs # NEW IMPORTS
+from .log_manager import setup_memory_logging, get_live_logs
 
 # Initialize Memory Logging to capture logs for GUI
 setup_memory_logging()
@@ -152,6 +152,7 @@ def index():
     
     total_indicator_count = get_unique_indicator_count()
     indicator_counts_by_type = get_indicator_counts_by_type()
+    logging.info(f"Indicator Counts: {indicator_counts_by_type}") # Debug Log
     country_stats = get_country_stats()
     whitelist = get_whitelist()
     
@@ -217,6 +218,15 @@ def job_history():
         except Exception:
             pass
     return jsonify(history)
+
+@app.route('/api/history/clear', methods=['POST'])
+@login_required
+def clear_history_route():
+    """Clears the job history."""
+    if clear_job_history():
+        return jsonify({'status': 'success', 'message': 'Job history cleared.'})
+    else:
+        return jsonify({'status': 'error', 'message': 'Failed to clear job history.'}), 500
 
 @app.route('/api/live_logs')
 @login_required

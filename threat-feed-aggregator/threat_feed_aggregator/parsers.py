@@ -3,6 +3,9 @@ import csv
 from io import StringIO
 import re
 import ipaddress
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Pre-compile regex patterns for performance
 URL_PATTERN = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+")
@@ -50,7 +53,6 @@ def identify_indicator_type(indicator):
         return "unknown"
 
     # Check for IP address or CIDR
-    # ipaddress module is generally efficient enough, but regex could be used for pre-filtering if needed.
     try:
         if '/' in indicator:
             ipaddress.ip_network(indicator, strict=False)
@@ -71,18 +73,28 @@ def identify_indicator_type(indicator):
 
     return "unknown"
 
-def parse_mixed_text(raw_data):
+def parse_mixed_text(raw_data, source_name="Unknown"):
     """
     Parses mixed text data, identifying indicator types for each line.
     Returns a list of tuples: (indicator_value, indicator_type).
+    Includes logging for progress tracking.
     """
     parsed_items = []
     lines = raw_data.splitlines()
-    for line in lines:
+    total_lines = len(lines)
+    logger.info(f"[{source_name}] Starting parse of {total_lines} lines...")
+    
+    for i, line in enumerate(lines):
         stripped_line = line.strip()
         if not stripped_line or stripped_line.startswith('#'):
             continue
         
         indicator_type = identify_indicator_type(stripped_line)
         parsed_items.append((stripped_line, indicator_type))
+        
+        # Log progress every 50,000 lines
+        if (i + 1) % 50000 == 0:
+            logger.info(f"[{source_name}] Parsed {i + 1}/{total_lines} lines...")
+
+    logger.info(f"[{source_name}] Parsing completed. Total items: {len(parsed_items)}")
     return parsed_items

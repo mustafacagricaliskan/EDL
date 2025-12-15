@@ -160,3 +160,40 @@ def filter_whitelisted_items(items, whitelist_db_items):
         if not whitelisted:
             filtered.append(item)
     return filtered
+
+def aggregate_ips(ip_list):
+    """
+    Aggregates a list of IP addresses and CIDR strings into the smallest possible set of CIDR blocks.
+    Uses Python's ipaddress.collapse_addresses.
+
+    Args:
+        ip_list (list): List of strings (e.g., ['192.168.1.1', '192.168.1.2', ...])
+
+    Returns:
+        list: A list of aggregated CIDR strings (e.g., ['192.168.1.0/24'])
+    """
+    if not ip_list:
+        return []
+
+    ipv4_networks = []
+    ipv6_networks = []
+
+    for item in ip_list:
+        try:
+            # strict=False allows bits set after the prefix len, helpful for dirty feeds
+            net = ipaddress.ip_network(item, strict=False)
+            if net.version == 4:
+                ipv4_networks.append(net)
+            else:
+                ipv6_networks.append(net)
+        except ValueError:
+            # Not a valid IP/CIDR, skip it
+            continue
+
+    # The magic happens here: collapse_addresses merges adjacent and overlapping networks
+    collapsed_v4 = ipaddress.collapse_addresses(ipv4_networks)
+    collapsed_v6 = ipaddress.collapse_addresses(ipv6_networks)
+
+    # Convert back to strings
+    result = [str(net) for net in collapsed_v4] + [str(net) for net in collapsed_v6]
+    return result

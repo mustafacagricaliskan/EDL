@@ -253,15 +253,21 @@ def upsert_indicators_bulk(indicators, source_name="Unknown"):
         finally:
             conn.close()
 
-def recalculate_scores():
+def recalculate_scores(source_confidence_map=None):
     """
-    Recalculates source_count and risk_score for ALL indicators.
-    Should be called periodically (e.g. after a feed update).
+    Recalculates source_count and risk_score for ALL indicators based on source confidence.
+    Formula: Base Score (Max Confidence of sources) + Overlap Bonus.
+    
+    Args:
+        source_confidence_map (dict): {source_name: confidence_score (int)}. Default confidence is 50.
     """
+    if source_confidence_map is None:
+        source_confidence_map = {}
+
     with DB_WRITE_LOCK:
         conn = get_db_connection()
         try:
-            # 1. Update source_count
+            # 1. Update source_count (Always keep this accurate)
             conn.execute('''
                 UPDATE indicators
                 SET source_count = (
@@ -271,15 +277,36 @@ def recalculate_scores():
                 )
             ''')
             
-            # 2. Update risk_score
-            # Base 50 + (Count-1)*10. Min 0, Max 100.
+            # 2. Update risk_score using Temporary Table for Confidences
+            # Create temp table
+            conn.execute('CREATE TEMPORARY TABLE IF NOT EXISTS temp_source_conf (name TEXT PRIMARY KEY, score INTEGER)')
+            conn.execute('DELETE FROM temp_source_conf')
+            
+            # Prepare data (default to 50 if not provided)
+            # We need to ensure all sources in DB are covered, so we might fallback to 50 in SQL
+            data_to_insert = [(name, score) for name, score in source_confidence_map.items()]
+            if data_to_insert:
+                conn.executemany('INSERT INTO temp_source_conf (name, score) VALUES (?, ?)', data_to_insert)
+            
+            # The complex update query:
+            # Calculate Max Confidence for each indicator
+            # COALESCE(sc.score, 50) ensures that if a source isn't in our map, it gets 50.
+            # Bonus: (Count - 1) * 5
             conn.execute('''
                 UPDATE indicators
-                SET risk_score = MIN(100, 50 + ((source_count - 1) * 10))
+                SET risk_score = (
+                    SELECT MIN(100, 
+                        MAX(COALESCE(sc.score, 50)) + ((indicators.source_count - 1) * 5)
+                    )
+                    FROM indicator_sources src
+                    LEFT JOIN temp_source_conf sc ON src.source_name = sc.name
+                    WHERE src.indicator = indicators.indicator
+                )
+                WHERE EXISTS (SELECT 1 FROM indicator_sources WHERE indicator = indicators.indicator)
             ''')
             
             conn.commit()
-            logger.info("Scores recalculated successfully.")
+            logger.info(f"Scores recalculated successfully with map: {source_confidence_map}")
         except Exception as e:
             logger.error(f"Error recalculating scores: {e}")
         finally:

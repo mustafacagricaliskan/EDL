@@ -5,488 +5,487 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Threat Feed Aggregator</title>
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/css/bootstrap.min.css') }}" rel="stylesheet">
     <!-- FontAwesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { background-color: #f8f9fa; }
-        .sidebar { height: 100vh; background-color: #343a40; color: white; position: fixed; padding-top: 20px; width: 250px; }
-        .sidebar a { color: white; text-decoration: none; display: block; padding: 10px 20px; }
-        .sidebar a:hover { background-color: #495057; }
-        .content { margin-left: 250px; padding: 20px; }
-        .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; }
-        .card-header { background-color: #fff; border-bottom: 1px solid #e9ecef; font-weight: bold; }
-        .status-badge { font-size: 0.9em; padding: 5px 10px; border-radius: 20px; }
-        .btn-action { margin-right: 5px; }
-        /* Log Terminal Style */
-        .terminal-window {
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            font-family: 'Courier New', Courier, monospace;
-            padding: 15px;
-            height: 400px;
-            overflow-y: auto;
-            border-radius: 5px;
-            font-size: 0.85em;
-        }
-        .log-entry { margin-bottom: 2px; border-bottom: 1px solid #333; padding-bottom: 2px; }
-        .log-time { color: #569cd6; margin-right: 10px; }
-        .log-level-INFO { color: #4ec9b0; }
-        .log-level-WARNING { color: #ce9178; }
-        .log-level-ERROR { color: #f44747; font-weight: bold; }
-    </style>
+    <link href="{{ url_for('static', filename='vendor/css/fontawesome.min.css') }}" rel="stylesheet">
+    <!-- Theme CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <!-- SweetAlert2 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/sweetalert2.min.css') }}">
+    <!-- jsVectorMap -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/jsvectormap.min.css') }}" />
+    
+    <script src="{{ url_for('static', filename='vendor/js/chart.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/js/jsvectormap.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/js/world.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/js/sweetalert2.all.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </head>
 <body>
 
     <!-- Sidebar -->
     <div class="sidebar">
-        <h4 class="text-center mb-4"><i class="fas fa-shield-alt"></i> Threat Feed</h4>
-        <a href="{{ url_for('index') }}" class="active"><i class="fas fa-tachometer-alt me-2"></i> Dashboard</a>
-        <a href="{{ url_for('system_settings') }}"><i class="fas fa-cogs me-2"></i> System Settings</a>
-        <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2"></i> Logout</a>
+        <h4><i class="fas fa-shield-alt me-2"></i> ThreatFeed</h4>
+        <a href="{{ url_for('index') }}" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <a href="{{ url_for('system_settings') }}"><i class="fas fa-cogs"></i> System Settings</a>
+        <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
 
     <!-- Content -->
     <div class="content">
         <!-- Header & Status -->
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3><i class="fas fa-network-wired"></i> Dashboard</h3>
+            <h3 class="fw-bold mb-0">Dashboard</h3>
             <div>
-                <span class="me-2 fw-bold">System Status:</span>
-                <span id="system-status" class="badge bg-secondary status-badge">Checking...</span>
+                <span class="me-2 fw-bold small text-uppercase text-muted">Status:</span>
+                <span id="system-status" class="badge bg-secondary rounded-pill px-3 py-2">Checking...</span>
                 <button type="button" class="btn btn-dark btn-sm ms-3" data-bs-toggle="modal" data-bs-target="#logModal">
-                    <i class="fas fa-terminal me-1"></i> Live Logs
+                    <i class="fas fa-terminal me-1"></i> Logs
                 </button>
-                <button id="run-btn" class="btn btn-primary btn-sm ms-2" onclick="runAggregation()">
-                    <i class="fas fa-sync"></i> Run All Feeds
+                <button id="run-btn" class="btn btn-primary btn-sm ms-2 shadow-sm" onclick="runAggregation()">
+                    <i class="fas fa-sync me-1"></i> Run Feeds
                 </button>
             </div>
         </div>
 
-        <!-- Global Stats -->
-        <div class="row">
-            <div class="col-md-3">
-                <div class="card text-center text-primary">
-                    <div class="card-body">
-                        <h6>TOTAL INDICATORS</h6>
-                        <h2 class="display-4 fw-bold">{{ total_indicator_count }}</h2>
+        <!-- Stats Cards -->
+        <div class="row mb-4">
+            <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+                <div class="card h-100">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="card-icon bg-gradient-primary shadow text-center me-2">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <p class="stat-card-title mb-0">Total Indicators</p>
+                        </div>
+                        <h5 class="stat-card-value mb-0">{{ total_indicator_count }}</h5>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card text-center text-success">
-                    <div class="card-body">
-                        <h6>IPs / CIDRs</h6>
-                        <h2 class="display-4 fw-bold">{{ indicator_counts_by_type.get('ip', 0) + indicator_counts_by_type.get('cidr', 0) }}</h2>
+            <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+                <div class="card h-100">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="card-icon bg-gradient-success shadow text-center me-2">
+                                <i class="fas fa-network-wired"></i>
+                            </div>
+                            <p class="stat-card-title mb-0">IP Addresses</p>
+                        </div>
+                        <h5 class="stat-card-value mb-0">{{ indicator_counts_by_type.get('ip', 0) + indicator_counts_by_type.get('cidr', 0) }}</h5>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card text-center text-info">
-                    <div class="card-body">
-                        <h6>DOMAINS/URLs</h6>
-                        <h2 class="display-4 fw-bold">{{ indicator_counts_by_type.get('domain', 0) + indicator_counts_by_type.get('url', 0) }}</h2>
+            <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+                <div class="card h-100">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="card-icon bg-gradient-info shadow text-center me-2">
+                                <i class="fas fa-globe"></i>
+                            </div>
+                            <p class="stat-card-title mb-0">Domains / URLs</p>
+                        </div>
+                        <h5 class="stat-card-value mb-0">{{ indicator_counts_by_type.get('domain', 0) + indicator_counts_by_type.get('url', 0) }}</h5>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card text-center text-warning">
-                    <div class="card-body">
-                        <h6>WHITELISTED</h6>
-                        <h2 class="display-4 fw-bold">{{ whitelist|length }}</h2>
+            <div class="col-xl-3 col-sm-6">
+                <div class="card h-100">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="card-icon bg-gradient-warning shadow text-center me-2">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <p class="stat-card-title mb-0">Whitelisted</p>
+                        </div>
+                        <h5 class="stat-card-value mb-0">{{ whitelist|length }}</h5>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Main Layout -->
         <div class="row">
-            <!-- Left Column: Chart & Active Feeds -->
-            <div class="col-md-8">
-                <!-- Detailed Active Jobs Status -->
-                <div class="card mb-3" id="active-jobs-card" style="display: none;">
-                    <div class="card-header bg-light text-dark">
-                        <i class="fas fa-spinner fa-spin me-2"></i> Running Jobs
+            <!-- Left Column (Visuals & Data) -->
+            <div class="col-lg-8">
+                
+                <!-- Threat Map -->
+                <div class="card mb-4">
+                    <div class="card-header border-0 bg-transparent pb-0">
+                        <h6 class="mb-0"><i class="fas fa-globe-americas me-2 text-primary"></i> Threat Map (Origins)</h6>
                     </div>
-                    <div class="card-body p-0">
-                        <ul class="list-group list-group-flush" id="active-jobs-list">
-                            <!-- Populated via JS -->
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Threat Map / Chart -->
-                <div class="card">
-                    <div class="card-header"><i class="fas fa-chart-pie me-2"></i> Threat Analytics (Top 10 Countries)</div>
                     <div class="card-body">
-                        <canvas id="threatChart" height="100"></canvas>
+                        <div id="world-map" style="height: 350px;"></div>
                     </div>
                 </div>
 
                 <!-- Trend Chart -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-chart-line me-2"></i> Threat Trend (Last 30 Days)</span>
+                <div class="card mb-4">
+                    <div class="card-header border-0 bg-transparent pb-0">
+                        <h6 class="mb-0"><i class="fas fa-chart-line me-2 text-info"></i> 30-Day Trend Analysis</h6>
                     </div>
                     <div class="card-body">
-                        <canvas id="trendChart" height="100"></canvas>
-                    </div>
-                </div>
-
-                <!-- Active Feeds List -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-list-ul me-2"></i> Configured Sources</span>
-                        <span class="badge bg-secondary">{{ config.source_urls|length }} Sources</span>
-                    </div>
-                    <div class="card-body">
-                        {% for source in config.source_urls %}
-                        <div class="border-bottom py-3">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h6 class="fw-bold mb-1">{{ source.name }}</h6>
-                                    <small class="text-muted"><i class="fas fa-link me-1"></i> {{ source.url }}</small>
-                                </div>
-                                <div class="text-end">
-                                    <button class="btn btn-sm btn-outline-secondary btn-action" data-bs-toggle="collapse" data-bs-target="#edit-{{ loop.index0 }}">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
-                                </div>
-                            </div>
-                            <!-- Stats Row -->
-                            <div class="d-flex justify-content-start mt-2 gap-4">
-                                <span class="badge bg-light text-dark border"><i class="fas fa-database me-1"></i> {{ stats.get(source.name, {}).get('count', '0') }} Items</span>
-                                <span class="badge bg-light text-dark border"><i class="fas fa-clock me-1"></i> {{ source.schedule_interval_minutes }}m</span>
-                                <span class="badge bg-light text-dark border" title="Last Updated"><i class="fas fa-history me-1"></i> {{ stats.get(source.name, {}).get('last_updated', 'Never') }} ({{ stats.get(source.name, {}).get('fetch_time', '0s') }})</span>
-                            </div>
-
-                            <!-- Edit Form -->
-                            <div class="collapse mt-3" id="edit-{{ loop.index0 }}">
-                                <div class="card card-body bg-light">
-                                    <form action="{{ url_for('update_url', index=loop.index0) }}" method="POST">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <div class="row g-2">
-                                            <div class="col-md-3">
-                                                <label class="form-label small">Name</label>
-                                                <input type="text" class="form-control form-control-sm" name="name" value="{{ source.name }}" required>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <label class="form-label small">URL</label>
-                                                <input type="text" class="form-control form-control-sm" name="url" value="{{ source.url }}" required>
-                                            </div>
-                                            <div class="col-md-2">
-                                                <label class="form-label small">Format</label>
-                                                <select class="form-select form-select-sm" name="format" onchange="toggleTaxiiFields(this)">
-                                                    <option value="text" {% if source.format == 'text' %}selected{% endif %}>Text</option>
-                                                    <option value="json" {% if source.format == 'json' %}selected{% endif %}>JSON</option>
-                                                    <option value="csv" {% if source.format == 'csv' %}selected{% endif %}>CSV</option>
-                                                    <option value="taxii" {% if source.format == 'taxii' %}selected{% endif %}>TAXII (STIX 2.x)</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-md-2 standard-field" style="{% if source.format == 'taxii' %}display:none;{% endif %}">
-                                                <label class="form-label small">Key/Col</label>
-                                                <input type="text" class="form-control form-control-sm" name="key_or_column" value="{{ source.key_or_column or '' }}" placeholder="Optional">
-                                            </div>
-                                            <div class="col-md-1">
-                                                <label class="form-label small">Conf %</label>
-                                                <input type="number" class="form-control form-control-sm" name="confidence" value="{{ source.confidence or 50 }}" min="0" max="100">
-                                            </div>
-                                            <div class="col-md-1">
-                                                <label class="form-label small">Ret.(d)</label>
-                                                <input type="number" class="form-control form-control-sm" name="retention_days" value="{{ source.retention_days or '' }}" placeholder="Def" min="1">
-                                            </div>
-                                            <div class="col-md-1">
-                                                <label class="form-label small">Interval</label>
-                                                <input type="number" class="form-control form-control-sm" name="schedule_interval_minutes" value="{{ source.schedule_interval_minutes }}" min="1">
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- TAXII Fields -->
-                                        <div class="row g-2 mt-2 taxii-field" style="{% if source.format != 'taxii' %}display:none;{% endif %}">
-                                            <div class="col-md-4">
-                                                <label class="form-label small">Collection ID</label>
-                                                <input type="text" class="form-control form-control-sm" name="collection_id" value="{{ source.collection_id or '' }}" placeholder="UUID">
-                                            </div>
-                                            <div class="col-md-4">
-                                                <label class="form-label small">Username</label>
-                                                <input type="text" class="form-control form-control-sm" name="username" value="{{ source.username or '' }}">
-                                            </div>
-                                            <div class="col-md-4">
-                                                <label class="form-label small">Password</label>
-                                                <input type="password" class="form-control form-control-sm" name="password" value="{{ source.password or '' }}">
-                                            </div>
-                                        </div>
-                                        <div class="mt-2 d-flex justify-content-between">
-                                            <a href="{{ url_for('remove_url', index=loop.index0) }}" class="text-danger small text-decoration-none" onclick="return confirm('Are you sure?')"><i class="fas fa-trash-alt"></i> Remove</a>
-                                            <div>
-                                                <button type="button" class="btn btn-sm btn-info me-1 text-white" onclick="testFeedConnection(this)"><i class="fas fa-flask"></i> Test</button>
-                                                <button type="button" class="btn btn-sm btn-secondary me-1" data-bs-toggle="collapse" data-bs-target="#edit-{{ loop.index0 }}">Cancel</button>
-                                                <button type="submit" class="btn btn-sm btn-primary">Update & Run</button>
-                                            </div>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
+                        <div style="height: 250px; width: 100%;">
+                            <canvas id="trendChart"></canvas>
                         </div>
-                        {% endfor %}
                     </div>
                 </div>
 
-                <!-- Job History Table -->
-                <div class="card mt-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-history me-2"></i> Job History & Logs (Last 20)</span>
-                        <button class="btn btn-sm btn-outline-danger" onclick="clearJobHistory()">
-                            <i class="fas fa-trash-alt me-1"></i> Clear History
-                        </button>
+                <!-- Active Jobs (Dynamic) -->
+                <div class="card mb-4 border-0 shadow-sm" id="active-jobs-card" style="display: none;">
+                    <div class="card-header bg-warning bg-opacity-10 text-warning">
+                        <i class="fas fa-spinner fa-spin me-2"></i> Running Jobs
                     </div>
                     <div class="card-body p-0">
-                        <table class="table table-striped table-hover mb-0" style="font-size: 0.9em;">
-                            <thead>
-                                <tr>
-                                    <th>Source</th>
-                                    <th>Status</th>
-                                    <th>Start Time</th>
-                                    <th>Duration</th>
-                                    <th>Items</th>
-                                    <th>Details</th>
-                                </tr>
-                            </thead>
-                            <tbody id="job-history-body">
-                                <tr><td colspan="6" class="text-center text-muted">Loading history...</td></tr>
-                            </tbody>
-                        </table>
+                        <ul class="list-group list-group-flush" id="active-jobs-list"></ul>
+                    </div>
+                </div>
+
+                <!-- Configured Sources -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fas fa-list-ul me-2 text-primary"></i> Active Sources</h6>
+                        <span class="badge bg-light text-dark">{{ config.source_urls|length }} Feeds</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-custom table-hover align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th style="width: 30%;">Source Name</th>
+                                        <th>Last Status</th>
+                                        <th>Items</th>
+                                        <th>Interval</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for source in config.source_urls %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar rounded-circle bg-light p-2 me-3 text-primary">
+                                                    <i class="fas fa-rss"></i>
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-0 text-sm fw-bold">{{ source.name }}</h6>
+                                                    <small class="text-muted text-break-word d-block" style="font-size: 0.75rem; max-width: 250px;">{{ source.url }}</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <small class="d-block text-dark fw-bold">{{ stats.get(source.name, {}).get('last_updated', 'Never') }}</small>
+                                            <small class="text-muted">{{ stats.get(source.name, {}).get('fetch_time', '0s') }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">{{ stats.get(source.name, {}).get('count', '0') }}</span>
+                                        </td>
+                                        <td>{{ source.schedule_interval_minutes }}m</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary border-0" data-bs-toggle="collapse" data-bs-target="#edit-{{ loop.index0 }}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <!-- Inline Edit Form (Row) -->
+                                    <tr class="collapse" id="edit-{{ loop.index0 }}">
+                                        <td colspan="5" class="bg-light p-4">
+                                            <form action="{{ url_for('update_url', index=loop.index0) }}" method="POST">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <div class="row g-3">
+                                                    <div class="col-md-3">
+                                                        <label class="form-label small fw-bold">Name</label>
+                                                        <input type="text" class="form-control form-control-sm" name="name" value="{{ source.name }}" required>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-bold">URL</label>
+                                                        <input type="text" class="form-control form-control-sm" name="url" value="{{ source.url }}" required>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small fw-bold">Format</label>
+                                                        <select class="form-select form-select-sm" name="format" onchange="toggleTaxiiFields(this)">
+                                                            <option value="text" {% if source.format == 'text' %}selected{% endif %}>Text</option>
+                                                            <option value="json" {% if source.format == 'json' %}selected{% endif %}>JSON</option>
+                                                            <option value="csv" {% if source.format == 'csv' %}selected{% endif %}>CSV</option>
+                                                            <option value="taxii" {% if source.format == 'taxii' %}selected{% endif %}>TAXII</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-3 standard-field" style="{% if source.format == 'taxii' %}display:none;{% endif %}">
+                                                        <label class="form-label small fw-bold">Key/Column</label>
+                                                        <input type="text" class="form-control form-control-sm" name="key_or_column" value="{{ source.key_or_column or '' }}">
+                                                    </div>
+                                                    
+                                                    <!-- Taxii Fields -->
+                                                    <div class="col-md-12 taxii-field" style="{% if source.format != 'taxii' %}display:none;{% endif %}">
+                                                        <div class="row g-2">
+                                                            <div class="col-md-4"><input type="text" class="form-control form-control-sm" name="collection_id" value="{{ source.collection_id or '' }}" placeholder="Collection ID"></div>
+                                                            <div class="col-md-4"><input type="text" class="form-control form-control-sm" name="username" value="{{ source.username or '' }}" placeholder="User"></div>
+                                                            <div class="col-md-4"><input type="password" class="form-control form-control-sm" name="password" value="{{ source.password or '' }}" placeholder="Pass"></div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small fw-bold">Conf (%)
+                                                        </label>
+                                                        <input type="number" class="form-control form-control-sm" name="confidence" value="{{ source.confidence or 50 }}">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small fw-bold">Ret (d)</label>
+                                                        <input type="number" class="form-control form-control-sm" name="retention_days" value="{{ source.retention_days or '' }}">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-label small fw-bold">Interval (m)</label>
+                                                        <input type="number" class="form-control form-control-sm" name="schedule_interval_minutes" value="{{ source.schedule_interval_minutes }}">
+                                                    </div>
+                                                    <div class="col-md-6 d-flex align-items-end justify-content-end gap-2">
+                                                        <button type="button" class="btn btn-sm btn-info text-white" onclick="testFeedConnection(this)"><i class="fas fa-flask"></i> Test</button>
+                                                        <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                                                        <a href="{{ url_for('remove_url', index=loop.index0) }}" class="btn btn-sm btn-outline-danger" onclick="return confirmAction(event, 'Delete source?')"><i class="fas fa-trash"></i></a>
+                                                    </div>
+                                                </div>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Job History -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fas fa-history me-2 text-muted"></i> Job History</h6>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearJobHistory()">Clear</button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover mb-0 small">
+                                <thead>
+                                    <tr>
+                                        <th>Source</th>
+                                        <th>Status</th>
+                                        <th>Time</th>
+                                        <th>Dur</th>
+                                        <th>Items</th>
+                                        <th>Msg</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="job-history-body">
+                                    <tr><td colspan="6" class="text-center p-3 text-muted">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Actions & Settings -->
-            <div class="col-md-4">
-                <!-- Add Source -->
-                <div class="card">
-                    <div class="card-header"><i class="fas fa-plus-circle me-2"></i> Add New Source</div>
+            <!-- Right Column (Controls) -->
+            <div class="col-lg-4">
+                
+                <!-- Add Source Card -->
+                <div class="card bg-gradient-primary text-white mb-4" style="background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);">
                     <div class="card-body">
+                        <h5 class="card-title fw-bold mb-3"><i class="fas fa-plus-circle me-2"></i> Add Source</h5>
                         <form action="{{ url_for('add_url') }}" method="POST">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <div class="mb-2">
-                                <input type="text" class="form-control" name="name" placeholder="Display Name" required>
+                                <input type="text" class="form-control form-control-sm border-0 bg-white bg-opacity-25 text-white placeholder-white" name="name" placeholder="Source Name" required>
                             </div>
                             <div class="mb-2">
-                                <input type="text" class="form-control" name="url" placeholder="Feed URL" required>
+                                <input type="text" class="form-control form-control-sm border-0 bg-white bg-opacity-25 text-white placeholder-white" name="url" placeholder="Feed URL" required>
                             </div>
                             <div class="row g-2 mb-2">
-                                <div class="col-md-4">
-                                    <select class="form-select" name="format" onchange="toggleTaxiiFields(this)">
-                                        <option value="text">Text</option>
-                                        <option value="json">JSON</option>
-                                        <option value="csv">CSV</option>
-                                        <option value="taxii">TAXII (STIX 2.x)</option>
+                                <div class="col-4">
+                                    <select class="form-select form-select-sm border-0 bg-white bg-opacity-25 text-white" name="format" onchange="toggleTaxiiFields(this)">
+                                        <option value="text" class="text-dark">Text</option>
+                                        <option value="json" class="text-dark">JSON</option>
+                                        <option value="csv" class="text-dark">CSV</option>
+                                        <option value="taxii" class="text-dark">TAXII</option>
                                     </select>
                                 </div>
-                                <div class="col-md-8 standard-field">
-                                    <input type="text" class="form-control" name="key_or_column" placeholder="Key (JSON) or Column (CSV)">
+                                <div class="col-8 standard-field">
+                                    <input type="text" class="form-control form-control-sm border-0 bg-white bg-opacity-25 text-white placeholder-white" name="key_or_column" placeholder="Key/Col">
                                 </div>
                             </div>
                             
-                            <!-- TAXII Fields -->
+                            <!-- Taxii Fields -->
                             <div class="row g-2 mb-2 taxii-field" style="display:none;">
-                                <div class="col-md-4">
-                                    <input type="text" class="form-control form-control-sm" name="collection_id" placeholder="Collection ID">
-                                </div>
-                                <div class="col-md-4">
-                                    <input type="text" class="form-control form-control-sm" name="username" placeholder="Username">
-                                </div>
-                                <div class="col-md-4">
-                                    <input type="password" class="form-control form-control-sm" name="password" placeholder="Password">
-                                </div>
+                                <div class="col-4"><input type="text" class="form-control form-control-sm bg-white bg-opacity-25 text-white border-0" name="collection_id" placeholder="Col. ID"></div>
+                                <div class="col-4"><input type="text" class="form-control form-control-sm bg-white bg-opacity-25 text-white border-0" name="username" placeholder="User"></div>
+                                <div class="col-4"><input type="password" class="form-control form-control-sm bg-white bg-opacity-25 text-white border-0" name="password" placeholder="Pass"></div>
                             </div>
 
-                            <div class="row g-2 mb-2">
-                                <div class="col-md-4">
-                                    <div class="input-group" title="Confidence Score (0-100)">
-                                        <span class="input-group-text"><i class="fas fa-percent"></i></span>
-                                        <input type="number" class="form-control" name="confidence" placeholder="50" min="0" max="100" value="50">
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="input-group" title="Retention Days (Default: Global)">
-                                        <span class="input-group-text"><i class="fas fa-hourglass-half"></i></span>
-                                        <input type="number" class="form-control" name="retention_days" placeholder="Days" min="1">
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="input-group" title="Schedule Interval (Minutes)">
-                                        <span class="input-group-text"><i class="fas fa-clock"></i></span>
-                                        <input type="number" class="form-control" name="schedule_interval_minutes" placeholder="Mins" min="1">
-                                    </div>
-                                </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-4"><input type="number" class="form-control form-control-sm border-0 bg-white bg-opacity-25 text-white placeholder-white" name="confidence" placeholder="Conf 50"></div>
+                                <div class="col-4"><input type="number" class="form-control form-control-sm border-0 bg-white bg-opacity-25 text-white placeholder-white" name="retention_days" placeholder="Ret (d)"></div>
+                                <div class="col-4"><input type="number" class="form-control form-control-sm border-0 bg-white bg-opacity-25 text-white placeholder-white" name="schedule_interval_minutes" placeholder="Int (m)"></div>
                             </div>
+                            
                             <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-info text-white" onclick="testFeedConnection(this)"><i class="fas fa-flask me-2"></i> Test Connection</button>
-                                <button type="submit" class="btn btn-success"><i class="fas fa-check me-2"></i> Add Source</button>
+                                <button type="button" class="btn btn-sm btn-light text-primary fw-bold" onclick="testFeedConnection(this)">Test</button>
+                                <button type="submit" class="btn btn-sm btn-warning fw-bold">Add Source</button>
                             </div>
                         </form>
                     </div>
                 </div>
 
-                <!-- Microsoft 365 Feeds -->
+                <!-- External Intelligence Feeds (Combined) -->
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fab fa-microsoft me-2"></i> Microsoft 365 Feeds</span>
-                        <button class="btn btn-sm btn-outline-primary" onclick="updateMS365()">
-                            <i class="fas fa-sync me-1"></i> Update
-                        </button>
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-cloud-download-alt me-2 text-info"></i> Intelligence Feeds</h6>
                     </div>
                     <div class="card-body">
-                        <small class="text-muted mb-2 d-block">Official endpoints for Allow Lists.</small>
-                        <div class="d-grid gap-2">
-                            <div class="btn-group">
-                                <a href="{{ url_for('download_file', filename='ms365_exchange_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-envelope me-2"></i> Exchange IPs</a>
-                                <a href="{{ url_for('download_file', filename='ms365_exchange_urls.txt') }}" class="btn btn-sm btn-outline-secondary text-start">URLs</a>
+                        <div class="list-group list-group-flush">
+                            <!-- M365 -->
+                            <div class="list-group-item px-0 py-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <i class="fab fa-microsoft me-2 text-primary"></i>
+                                        <strong>Microsoft 365</strong>
+                                    </div>
+                                    <button class="btn btn-sm btn-light text-primary" onclick="updateMS365()"><i class="fas fa-sync"></i></button>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="{{ url_for('download_file', filename='ms365_exchange_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Exchange</a>
+                                    <a href="{{ url_for('download_file', filename='ms365_skype_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Teams</a>
+                                    <a href="{{ url_for('download_file', filename='ms365_sharepoint_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">SharePoint</a>
+                                </div>
                             </div>
-                            <div class="btn-group">
-                                <a href="{{ url_for('download_file', filename='ms365_skype_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fab fa-skype me-2"></i> Teams/Skype IPs</a>
-                                <a href="{{ url_for('download_file', filename='ms365_skype_urls.txt') }}" class="btn btn-sm btn-outline-secondary text-start">URLs</a>
+                            
+                            <!-- GitHub -->
+                            <div class="list-group-item px-0 py-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <i class="fab fa-github me-2 text-dark"></i>
+                                        <strong>GitHub</strong>
+                                    </div>
+                                    <button class="btn btn-sm btn-light text-dark" onclick="updateGitHub()"><i class="fas fa-sync"></i></button>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="{{ url_for('download_file', filename='github_git_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Git</a>
+                                    <a href="{{ url_for('download_file', filename='github_web_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Web</a>
+                                    <a href="{{ url_for('download_file', filename='github_actions_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Actions</a>
+                                </div>
                             </div>
-                            <div class="btn-group">
-                                <a href="{{ url_for('download_file', filename='ms365_sharepoint_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-share-alt me-2"></i> SharePoint IPs</a>
-                                <a href="{{ url_for('download_file', filename='ms365_sharepoint_urls.txt') }}" class="btn btn-sm btn-outline-secondary text-start">URLs</a>
-                            </div>
-                            <div class="btn-group">
-                                <a href="{{ url_for('download_file', filename='ms365_common_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-globe me-2"></i> Common IPs</a>
-                                <a href="{{ url_for('download_file', filename='ms365_common_urls.txt') }}" class="btn btn-sm btn-outline-secondary text-start">URLs</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- GitHub Feeds -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fab fa-github me-2"></i> GitHub Feeds</span>
-                        <button class="btn btn-sm btn-outline-primary" onclick="updateGitHub()">
-                            <i class="fas fa-sync me-1"></i> Update
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <small class="text-muted mb-2 d-block">Official endpoints for Allow Lists.</small>
-                        <div class="d-grid gap-2">
-                            <a href="{{ url_for('download_file', filename='github_git_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-code-branch me-2"></i> Git Operations</a>
-                            <a href="{{ url_for('download_file', filename='github_web_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-globe me-2"></i> Web Access</a>
-                            <a href="{{ url_for('download_file', filename='github_actions_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-robot me-2"></i> Actions Runners</a>
-                            <a href="{{ url_for('download_file', filename='github_hooks_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-plug me-2"></i> Webhooks</a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Azure Public Cloud Feeds -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-cloud me-2"></i> Azure Cloud Feeds</span>
-                        <button class="btn btn-sm btn-outline-primary" onclick="updateAzure()">
-                            <i class="fas fa-sync me-1"></i> Update
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <small class="text-muted mb-2 d-block">Public Cloud Service Tags (Json).</small>
-                        <div class="d-grid gap-2">
-                            <a href="{{ url_for('download_file', filename='azure_all_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-globe me-2"></i> All Azure IPs</a>
-                            <a href="{{ url_for('download_file', filename='azure_westeurope_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-map-marker-alt me-2"></i> West Europe (Holland)</a>
-                            <a href="{{ url_for('download_file', filename='azure_sql_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-database me-2"></i> Azure SQL</a>
-                            <a href="{{ url_for('download_file', filename='azure_storage_ips.txt') }}" class="btn btn-sm btn-outline-secondary text-start"><i class="fas fa-hdd me-2"></i> Azure Storage</a>
+                            <!-- Azure -->
+                            <div class="list-group-item px-0 py-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        <i class="fas fa-cloud me-2 text-info"></i>
+                                        <strong>Azure Cloud</strong>
+                                    </div>
+                                    <button class="btn btn-sm btn-light text-info" onclick="updateAzure()"><i class="fas fa-sync"></i></button>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="{{ url_for('download_file', filename='azure_all_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">All IPs</a>
+                                    <a href="{{ url_for('download_file', filename='azure_westeurope_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">West Europe</a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Downloads -->
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-download me-2"></i> Export Lists</span>
-                        <button class="btn btn-sm btn-outline-primary" onclick="regenerateLists()">
-                            <i class="fas fa-sync me-1"></i> Regenerate
-                        </button>
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-file-export me-2 text-success"></i> Export EDLs</h6>
                     </div>
                     <div class="card-body">
                         <div class="d-grid gap-2">
-                            <a href="{{ url_for('download_file', filename='palo_alto_edl.txt') }}" class="btn btn-outline-primary text-start"><i class="fas fa-file-alt me-2"></i> Palo Alto EDL</a>
-                            <a href="{{ url_for('download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-primary text-start"><i class="fas fa-file-alt me-2"></i> Fortinet EDL</a>
-                            <a href="{{ url_for('download_file', filename='url_list.txt') }}" class="btn btn-outline-info text-start"><i class="fas fa-link me-2"></i> URL List</a>
+                            <a href="{{ url_for('download_file', filename='palo_alto_edl.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
+                                <i class="fas fa-download me-2"></i> Palo Alto EDL
+                            </a>
+                            <a href="{{ url_for('download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
+                                <i class="fas fa-download me-2"></i> Fortinet EDL
+                            </a>
+                            <a href="{{ url_for('download_file', filename='url_list.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
+                                <i class="fas fa-download me-2"></i> URL List
+                            </a>
+                            <button class="btn btn-sm btn-success mt-2" onclick="regenerateLists()">
+                                <i class="fas fa-sync me-2"></i> Regenerate Files
+                            </button>
                         </div>
                     </div>
                 </div>
 
-
-
-
-
-
-
-                <!-- Whitelist -->
+                <!-- Whitelist & SafeList -->
                 <div class="card">
-                    <div class="card-header"><i class="fas fa-clipboard-check me-2"></i> Whitelist</div>
-                    <div class="card-body">
-                        <form action="{{ url_for('add_whitelist') }}" method="POST" class="mb-3">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="text" class="form-control form-control-sm mb-2" name="item" placeholder="IP or CIDR (e.g. 8.8.8.8, 192.168.1.0/24)" required>
-                            <input type="text" class="form-control form-control-sm mb-2" name="description" placeholder="Description (Optional)">
-                            <button type="submit" class="btn btn-dark btn-sm w-100">Add to Whitelist</button>
-                        </form>
-                        <div style="max-height: 150px; overflow-y: auto;">
-                            {% if whitelist %}
-                                <ul class="list-group list-group-flush small">
-                                {% for w in whitelist %}
-                                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                        <span title="{{ w.description }}">{{ w.item }}</span>
-                                        <a href="{{ url_for('remove_whitelist', item_id=w.id) }}" class="text-danger"><i class="fas fa-times"></i></a>
-                                    </li>
-                                {% endfor %}
-                                </ul>
-                            {% else %}
-                                <p class="text-muted small text-center">Empty whitelist</p>
-                            {% endif %}
-                        </div>
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-shield-virus me-2 text-warning"></i> Access Control</h6>
                     </div>
-                </div>
-
-                <!-- Safe List (Global) -->
-                <div class="card">
-                    <div class="card-header bg-success text-white"><i class="fas fa-shield-alt me-2"></i> Global Safe List</div>
                     <div class="card-body">
-                        <p class="small text-muted mb-2">Protected IPs/Domains loaded from <code>data/safe_list.txt</code>.</p>
+                        <!-- Tabs -->
+                        <ul class="nav nav-pills mb-3 nav-fill" id="pills-tab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active btn-sm py-1" id="pills-white-tab" data-bs-toggle="pill" data-bs-target="#pills-white" type="button">Whitelist</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link btn-sm py-1" id="pills-safe-tab" data-bs-toggle="pill" data-bs-target="#pills-safe" type="button">Safe List</button>
+                            </li>
+                        </ul>
                         
-                        <form action="{{ url_for('add_safe_list_item') }}" method="POST" class="mb-3 d-flex gap-2">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="text" class="form-control form-control-sm" name="item" placeholder="Add IP or Domain" required>
-                            <button type="submit" class="btn btn-sm btn-light text-success"><i class="fas fa-plus"></i></button>
-                        </form>
-
-                        <div style="max-height: 150px; overflow-y: auto;">
-                            <ul class="list-group list-group-flush small">
-                                {% for item in safe_list %}
-                                    <li class="list-group-item px-0 text-success d-flex justify-content-between align-items-center">
-                                        <span><i class="fas fa-check-circle me-2"></i> {{ item }}</span>
-                                        <form action="{{ url_for('remove_safe_list_item') }}" method="POST" style="display:inline;">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <input type="hidden" name="item" value="{{ item }}">
-                                            <button type="submit" class="btn btn-link btn-sm p-0 text-danger" onclick="return confirm('Remove {{ item }} from Safe List?')"><i class="fas fa-times"></i></button>
-                                        </form>
-                                    </li>
-                                {% endfor %}
-                            </ul>
+                        <div class="tab-content" id="pills-tabContent">
+                            <!-- Whitelist Tab -->
+                            <div class="tab-pane fade show active" id="pills-white" role="tabpanel">
+                                <form action="{{ url_for('add_whitelist') }}" method="POST" class="mb-3">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control form-control-sm" name="item" placeholder="IP/CIDR" required>
+                                        <button class="btn btn-warning btn-sm" type="submit"><i class="fas fa-plus"></i></button>
+                                    </div>
+                                </form>
+                                <div style="max-height: 150px; overflow-y: auto;" class="border rounded p-2 bg-light">
+                                    <ul class="list-unstyled mb-0 small">
+                                    {% if whitelist %}
+                                        {% for w in whitelist %}
+                                        <li class="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1">
+                                            <span class="text-truncate" style="max-width: 150px;" title="{{ w.description }}">{{ w.item }}</span>
+                                            <a href="{{ url_for('remove_whitelist', item_id=w.id) }}" class="text-danger"><i class="fas fa-times"></i></a>
+                                        </li>
+                                        {% endfor %}
+                                    {% else %}
+                                        <li class="text-muted text-center">Empty</li>
+                                    {% endif %}
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <!-- Safe List Tab -->
+                            <div class="tab-pane fade" id="pills-safe" role="tabpanel">
+                                <form action="{{ url_for('add_safe_list_item') }}" method="POST" class="mb-3">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control form-control-sm" name="item" placeholder="IP/Domain" required>
+                                        <button class="btn btn-success btn-sm" type="submit"><i class="fas fa-plus"></i></button>
+                                    </div>
+                                </form>
+                                <div style="max-height: 150px; overflow-y: auto;" class="border rounded p-2 bg-light">
+                                    <ul class="list-unstyled mb-0 small">
+                                    {% for item in safe_list %}
+                                        <li class="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1 text-success">
+                                            <span>{{ item }}</span>
+                                            <form action="{{ url_for('remove_safe_list_item') }}" method="POST" style="display:inline;">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <input type="hidden" name="item" value="{{ item }}">
+                                                <button type="submit" class="btn btn-link btn-sm p-0 text-danger" onclick="return confirmAction(event, 'Remove from Safe List?')"><i class="fas fa-times"></i></button>
+                                            </form>
+                                        </li>
+                                    {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-
-
-
 
             </div>
         </div>
         
         <footer class="mt-5 text-center text-muted small">
-            <p>Threat Feed Aggregator v1.1</p>
+            <p>Threat Feed Aggregator v1.2</p>
         </footer>
     </div>
 
@@ -525,27 +524,36 @@
     </div>
 
     <!-- JavaScript -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
     <script>
-        // --- Chart.js Data ---
-        const countryData = {{ country_stats|tojson }};
-        const ctx = document.getElementById('threatChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: countryData.map(item => item.country_code),
-                datasets: [{
-                    label: 'Indicators per Country',
-                    data: countryData.map(item => item.count),
-                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                }]
+        // --- World Map ---
+        const countryDataList = {{ country_stats|tojson }};
+        const mapData = {};
+        countryDataList.forEach(item => {
+            mapData[item.country_code] = item.count;
+        });
+
+        const map = new jsVectorMap({
+            selector: '#world-map',
+            map: 'world',
+            backgroundColor: 'transparent',
+            draggable: true,
+            zoomButtons: true,
+            zoomOnScroll: false,
+            regionStyle: {
+                initial: { fill: '#e9ecef', stroke: '#ffffff', strokeWidth: 0.5 },
+                hover:   { fill: '#ced4da' }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true } }
+            visualizeData: {
+                scale: ['#e9ecef', '#0d6efd'], // Light Grey to Bootstrap Blue
+                values: mapData
+            },
+            onRegionTooltipShow(event, tooltip, code) {
+                const count = mapData[code] || 0;
+                tooltip.text(
+                    `<div class="text-center fw-bold">${tooltip.text()}</div>` +
+                    `<div class="text-info">${count} Indicators</div>`
+                , true);
             }
         });
 
@@ -681,134 +689,159 @@
         }
 
         function clearJobHistory() {
-            if(!confirm('Are you sure you want to clear the entire job history? This cannot be undone.')) return;
-            
-            // Get CSRF token from one of the forms
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            Swal.fire({
+                title: 'Clear History?',
+                text: 'Are you sure you want to clear the entire job history? This cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ff0055',
+                cancelButtonColor: '#444',
+                confirmButtonText: 'Yes, clear it!'
+            }).then((result) => {
+                if (!result.isConfirmed) return;
 
-            fetch('/api/history/clear', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    fetchJobHistory(); // Refresh table
-                } else {
-                    alert('Error clearing history: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while clearing history.');
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+                fetch('/api/history/clear', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.status === 'success') {
+                        fetchJobHistory(); // Refresh table
+                        Swal.fire('Cleared!', 'Job history has been cleared.', 'success');
+                    } else {
+                        Swal.fire('Error', data.message || 'Unknown error', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'An error occurred.', 'error');
+                });
             });
         }
 
         function regenerateLists() {
-            if(!confirm('This will regenerate the Palo Alto and Fortinet EDL files based on the current database content. Continue?')) return;
-            
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            Swal.fire({
+                title: 'Regenerate Lists?',
+                text: 'This will regenerate the Palo Alto and Fortinet EDL files based on the current database content.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, regenerate',
+                confirmButtonColor: '#00d4ff'
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+                
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
 
-            fetch('/api/regenerate_lists', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    alert('Lists regenerated successfully!');
-                } else {
-                    alert('Error regenerating lists: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while regenerating lists.');
+                fetch('/api/regenerate_lists', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken}
+                })
+                .then(response => response.json())
+                .then(data => {
+                    Swal.fire({
+                        title: data.status === 'success' ? 'Success' : 'Error',
+                        text: data.message,
+                        icon: data.status === 'success' ? 'success' : 'error'
+                    });
+                })
+                .catch(error => Swal.fire('Error', 'An error occurred.', 'error'));
             });
         }
 
         function updateMS365() {
-            if(!confirm('This will fetch the latest Microsoft 365 endpoints and regenerate the files. This may take a few seconds. Continue?')) return;
-            
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-
-            fetch('/api/update_ms365', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    alert(data.message);
-                } else {
-                    alert('Error updating MS365 feeds: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while updating MS365 feeds.');
+            Swal.fire({
+                title: 'Update MS365 Feeds?',
+                text: 'This will fetch the latest Microsoft 365 endpoints.',
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonText: 'Update'
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+                
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                fetch('/api/update_ms365', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken}
+                })
+                .then(response => response.json())
+                .then(data => Swal.fire(data.status === 'success' ? 'Success' : 'Error', data.message, data.status === 'success' ? 'success' : 'error'))
+                .catch(error => Swal.fire('Error', 'An error occurred.', 'error'));
             });
         }
 
         function updateGitHub() {
-            if(!confirm('This will fetch the latest GitHub IP ranges and regenerate the files. This may take a few seconds. Continue?')) return;
-            
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-
-            fetch('/api/update_github', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    alert(data.message);
-                } else {
-                    alert('Error updating GitHub feeds: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while updating GitHub feeds.');
+            Swal.fire({
+                title: 'Update GitHub Feeds?',
+                text: 'This will fetch the latest GitHub IP ranges.',
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonText: 'Update'
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+                
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                fetch('/api/update_github', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken}
+                })
+                .then(response => response.json())
+                .then(data => Swal.fire(data.status === 'success' ? 'Success' : 'Error', data.message, data.status === 'success' ? 'success' : 'error'))
+                .catch(error => Swal.fire('Error', 'An error occurred.', 'error'));
             });
         }
 
         function updateAzure() {
-            if(!confirm('This will find and download the latest Azure Service Tags JSON. This may take a while. Continue?')) return;
-            
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-
-            fetch('/api/update_azure', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    alert(data.message);
-                } else {
-                    alert('Error updating Azure feeds: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while updating Azure feeds.');
+            Swal.fire({
+                title: 'Update Azure Feeds?',
+                text: 'This will download the latest Azure Service Tags JSON. This may take a while.',
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonText: 'Update'
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+                
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                fetch('/api/update_azure', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken}
+                })
+                .then(response => response.json())
+                .then(data => Swal.fire(data.status === 'success' ? 'Success' : 'Error', data.message, data.status === 'success' ? 'success' : 'error'))
+                .catch(error => Swal.fire('Error', 'An error occurred.', 'error'));
             });
+        }
+
+        function confirmAction(event, message) {
+            event.preventDefault();
+            const element = event.currentTarget; 
+            
+            Swal.fire({
+                title: 'Are you sure?',
+                text: message,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ff0055',
+                cancelButtonColor: '#444',
+                confirmButtonText: 'Yes, do it!',
+                background: '#ffffff',
+                color: '#333'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    if (element.tagName === 'A') {
+                        window.location.href = element.href;
+                    } else if (element.tagName === 'BUTTON' || element.tagName === 'INPUT') {
+                        const form = element.closest('form');
+                        if (form) form.submit();
+                    }
+                }
+            });
+            return false;
         }
 
         function runAggregation() {
@@ -831,7 +864,7 @@
             const name = form.querySelector('[name="name"]').value;
             
             if(!url) {
-                alert('Please enter a URL first.');
+                Swal.fire('Error', 'Please enter a URL first.', 'error');
                 return;
             }
 
@@ -858,13 +891,21 @@
             .then(response => response.json())
             .then(data => {
                 let msg = data.message;
+                let htmlMsg = msg.replace(/\n/g, '<br>');
+                
                 if(data.sample && data.sample.length > 0) {
-                    msg += '\n\nSample Data (First 5):\n' + data.sample.join('\n');
+                    htmlMsg += '<br><br><strong>Sample Data:</strong><br><div class="text-start bg-light p-2 rounded small font-monospace text-dark">' + data.sample.join('<br>') + '</div>';
                 }
-                alert(msg);
+                
+                Swal.fire({
+                    title: data.status === 'success' ? 'Connection Successful' : 'Connection Failed',
+                    html: htmlMsg,
+                    icon: data.status === 'success' ? 'success' : 'error',
+                    width: '600px'
+                });
             })
             .catch(error => {
-                alert('Error testing feed: ' + error);
+                Swal.fire('Error', 'Testing failed: ' + error, 'error');
             })
             .finally(() => {
                 btnElement.disabled = false;

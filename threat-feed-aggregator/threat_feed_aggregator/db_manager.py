@@ -85,6 +85,18 @@ def init_db():
                     message TEXT
                 )
             ''')
+
+            # Stats History Table (New for Trend Graphs)
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS stats_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    total_indicators INTEGER,
+                    ip_count INTEGER,
+                    domain_count INTEGER,
+                    url_count INTEGER
+                )
+            ''')
             
             conn.commit()
         except Exception as e:
@@ -473,3 +485,47 @@ def delete_whitelisted_indicators(items_to_delete):
             return False
         finally:
             conn.close()
+
+def save_historical_stats():
+    """Captures current stats and saves to history."""
+    with DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            cursor = conn.execute("SELECT COUNT(*) FROM indicators")
+            total = cursor.fetchone()[0]
+            
+            cursor = conn.execute("SELECT type, COUNT(*) FROM indicators GROUP BY type")
+            counts = {row[0]: row[1] for row in cursor.fetchall()}
+            
+            ip_count = counts.get('ip', 0) + counts.get('cidr', 0)
+            domain_count = counts.get('domain', 0)
+            url_count = counts.get('url', 0)
+            
+            now_iso = datetime.now(timezone.utc).isoformat()
+            
+            conn.execute('''
+                INSERT INTO stats_history (timestamp, total_indicators, ip_count, domain_count, url_count)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (now_iso, total, ip_count, domain_count, url_count))
+            
+            conn.commit()
+            logger.info("Saved historical stats for trend analysis.")
+        except Exception as e:
+            logger.error(f"Error saving stats history: {e}")
+        finally:
+            conn.close()
+
+def get_historical_stats(days=30):
+    conn = get_db_connection()
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        
+        cursor = conn.execute('''
+            SELECT timestamp, total_indicators, ip_count, domain_count, url_count 
+            FROM stats_history 
+            WHERE timestamp > ? 
+            ORDER BY timestamp ASC
+        ''', (cutoff,))
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()

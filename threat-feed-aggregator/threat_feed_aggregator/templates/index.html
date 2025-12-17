@@ -43,7 +43,8 @@
     <!-- Sidebar -->
     <div class="sidebar">
         <h4 class="text-center mb-4"><i class="fas fa-shield-alt"></i> Threat Feed</h4>
-        <a href="#"><i class="fas fa-tachometer-alt me-2"></i> Dashboard</a>
+        <a href="{{ url_for('index') }}" class="active"><i class="fas fa-tachometer-alt me-2"></i> Dashboard</a>
+        <a href="{{ url_for('system_settings') }}"><i class="fas fa-cogs me-2"></i> System Settings</a>
         <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt me-2"></i> Logout</a>
     </div>
 
@@ -123,6 +124,16 @@
                     </div>
                 </div>
 
+                <!-- Trend Chart -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-chart-line me-2"></i> Threat Trend (Last 30 Days)</span>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="trendChart" height="100"></canvas>
+                    </div>
+                </div>
+
                 <!-- Active Feeds List -->
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -166,13 +177,14 @@
                                             </div>
                                             <div class="col-md-2">
                                                 <label class="form-label small">Format</label>
-                                                <select class="form-select form-select-sm" name="format">
+                                                <select class="form-select form-select-sm" name="format" onchange="toggleTaxiiFields(this)">
                                                     <option value="text" {% if source.format == 'text' %}selected{% endif %}>Text</option>
                                                     <option value="json" {% if source.format == 'json' %}selected{% endif %}>JSON</option>
                                                     <option value="csv" {% if source.format == 'csv' %}selected{% endif %}>CSV</option>
+                                                    <option value="taxii" {% if source.format == 'taxii' %}selected{% endif %}>TAXII (STIX 2.x)</option>
                                                 </select>
                                             </div>
-                                            <div class="col-md-2">
+                                            <div class="col-md-2 standard-field" style="{% if source.format == 'taxii' %}display:none;{% endif %}">
                                                 <label class="form-label small">Key/Col</label>
                                                 <input type="text" class="form-control form-control-sm" name="key_or_column" value="{{ source.key_or_column or '' }}" placeholder="Optional">
                                             </div>
@@ -189,9 +201,26 @@
                                                 <input type="number" class="form-control form-control-sm" name="schedule_interval_minutes" value="{{ source.schedule_interval_minutes }}" min="1">
                                             </div>
                                         </div>
+                                        
+                                        <!-- TAXII Fields -->
+                                        <div class="row g-2 mt-2 taxii-field" style="{% if source.format != 'taxii' %}display:none;{% endif %}">
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Collection ID</label>
+                                                <input type="text" class="form-control form-control-sm" name="collection_id" value="{{ source.collection_id or '' }}" placeholder="UUID">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Username</label>
+                                                <input type="text" class="form-control form-control-sm" name="username" value="{{ source.username or '' }}">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small">Password</label>
+                                                <input type="password" class="form-control form-control-sm" name="password" value="{{ source.password or '' }}">
+                                            </div>
+                                        </div>
                                         <div class="mt-2 d-flex justify-content-between">
                                             <a href="{{ url_for('remove_url', index=loop.index0) }}" class="text-danger small text-decoration-none" onclick="return confirm('Are you sure?')"><i class="fas fa-trash-alt"></i> Remove</a>
                                             <div>
+                                                <button type="button" class="btn btn-sm btn-info me-1 text-white" onclick="testFeedConnection(this)"><i class="fas fa-flask"></i> Test</button>
                                                 <button type="button" class="btn btn-sm btn-secondary me-1" data-bs-toggle="collapse" data-bs-target="#edit-{{ loop.index0 }}">Cancel</button>
                                                 <button type="submit" class="btn btn-sm btn-primary">Update & Run</button>
                                             </div>
@@ -247,33 +276,54 @@
                                 <input type="text" class="form-control" name="url" placeholder="Feed URL" required>
                             </div>
                             <div class="row g-2 mb-2">
-                                <div class="col-md-6">
-                                    <select class="form-select" name="format">
+                                <div class="col-md-4">
+                                    <select class="form-select" name="format" onchange="toggleTaxiiFields(this)">
                                         <option value="text">Text</option>
                                         <option value="json">JSON</option>
                                         <option value="csv">CSV</option>
+                                        <option value="taxii">TAXII (STIX 2.x)</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-8 standard-field">
+                                    <input type="text" class="form-control" name="key_or_column" placeholder="Key (JSON) or Column (CSV)">
+                                </div>
+                            </div>
+                            
+                            <!-- TAXII Fields -->
+                            <div class="row g-2 mb-2 taxii-field" style="display:none;">
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control form-control-sm" name="collection_id" placeholder="Collection ID">
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control form-control-sm" name="username" placeholder="Username">
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="password" class="form-control form-control-sm" name="password" placeholder="Password">
+                                </div>
+                            </div>
+
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-4">
                                     <div class="input-group" title="Confidence Score (0-100)">
                                         <span class="input-group-text"><i class="fas fa-percent"></i></span>
                                         <input type="number" class="form-control" name="confidence" placeholder="50" min="0" max="100" value="50">
                                     </div>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-4">
                                     <div class="input-group" title="Retention Days (Default: Global)">
                                         <span class="input-group-text"><i class="fas fa-hourglass-half"></i></span>
                                         <input type="number" class="form-control" name="retention_days" placeholder="Days" min="1">
                                     </div>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-4">
                                     <div class="input-group" title="Schedule Interval (Minutes)">
                                         <span class="input-group-text"><i class="fas fa-clock"></i></span>
                                         <input type="number" class="form-control" name="schedule_interval_minutes" placeholder="Mins" min="1">
                                     </div>
                                 </div>
                             </div>
-                            <div class="d-grid">
+                            <div class="d-grid gap-2">
+                                <button type="button" class="btn btn-info text-white" onclick="testFeedConnection(this)"><i class="fas fa-flask me-2"></i> Test Connection</button>
                                 <button type="submit" class="btn btn-success"><i class="fas fa-check me-2"></i> Add Source</button>
                             </div>
                         </form>
@@ -366,42 +416,11 @@
                     </div>
                 </div>
 
-                <!-- Settings -->
-                <div class="card">
-                    <div class="card-header"><i class="fas fa-cogs me-2"></i> Settings</div>
-                    <div class="card-body">
-                        <form action="{{ url_for('update_settings') }}" method="POST">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <label class="form-label small">Indicator Lifetime (days)</label>
-                            <div class="input-group mb-2">
-                                <input type="number" class="form-control" name="indicator_lifetime_days" value="{{ config.indicator_lifetime_days }}" min="0">
-                                <button class="btn btn-outline-secondary" type="submit">Save</button>
-                            </div>
-                            <small class="text-muted d-block mb-3">Older IPs are automatically removed.</small>
-                        </form>
-                    </div>
-                </div>
 
-                <!-- SSL -->
-                <div class="card">
-                    <div class="card-header"><i class="fas fa-lock me-2"></i> SSL Configuration</div>
-                    <div class="card-body">
-                        <form action="{{ url_for('upload_cert') }}" method="POST" enctype="multipart/form-data">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <div class="mb-2">
-                                <label class="form-label small">Upload .pfx Certificate</label>
-                                <input type="file" class="form-control form-control-sm" name="pfx_file">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small">PFX Password</label>
-                                <input type="password" class="form-control form-control-sm" name="password">
-                            </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-upload me-2"></i> Upload & Restart</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+
+
+
+
 
                 <!-- Whitelist -->
                 <div class="card">
@@ -459,55 +478,9 @@
                     </div>
                 </div>
 
-                <!-- LDAP Config -->
-                <div class="card">
-                    <div class="card-header"><i class="fas fa-users me-2"></i> LDAP Configuration</div>
-                    <div class="card-body">
-                        <form action="{{ url_for('update_ldap_settings') }}" method="POST">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <div class="form-check form-switch mb-3">
-                                <input class="form-check-input" type="checkbox" id="ldap_enabled" name="ldap_enabled" {% if config.get('auth', {}).get('ldap', {}).get('enabled') %}checked{% endif %}>
-                                <label class="form-check-label" for="ldap_enabled">Enable LDAP Auth</label>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small">Server URL</label>
-                                <input type="text" class="form-control form-control-sm" name="ldap_server" value="{{ config.get('auth', {}).get('ldap', {}).get('server', '') }}" placeholder="ldap://domain.com">
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small">Domain / Base DN</label>
-                                <input type="text" class="form-control form-control-sm" name="ldap_domain" value="{{ config.get('auth', {}).get('ldap', {}).get('domain', '') }}" placeholder="dc=example,dc=com">
-                            </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-save me-2"></i> Save LDAP Settings</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
 
-                <!-- Admin Password -->
-                <div class="card">
-                    <div class="card-header"><i class="fas fa-key me-2"></i> Admin Password</div>
-                    <div class="card-body">
-                        <form action="{{ url_for('change_admin_password') }}" method="POST">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <div class="mb-2">
-                                <label class="form-label small">Current Password</label>
-                                <input type="password" class="form-control form-control-sm" name="current_password" required>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small">New Password</label>
-                                <input type="password" class="form-control form-control-sm" name="new_password" required>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small">Confirm New Password</label>
-                                <input type="password" class="form-control form-control-sm" name="confirm_new_password" required>
-                            </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-warning btn-sm text-white"><i class="fas fa-edit me-2"></i> Change Password</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+
+
 
             </div>
         </div>
@@ -526,6 +499,20 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body bg-dark">
+                    <!-- Log Filters -->
+                    <div class="d-flex gap-2 mb-2">
+                        <input type="text" id="logFilterInput" class="form-control form-control-sm bg-secondary text-white border-0" placeholder="Search logs...">
+                        <select id="logLevelSelect" class="form-select form-select-sm bg-secondary text-white border-0" style="width: 120px;">
+                            <option value="ALL">All Levels</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                         <div class="form-check form-switch text-white align-self-center" title="Hide periodic API polling logs">
+                            <input class="form-check-input" type="checkbox" id="hidePollingLogs" checked>
+                            <label class="form-check-label small" style="white-space: nowrap;" for="hidePollingLogs">Hide Polls</label>
+                        </div>
+                    </div>
                     <div id="terminal-window" class="terminal-window">
                         <!-- Logs will be injected here -->
                     </div>
@@ -561,6 +548,41 @@
                 scales: { y: { beginAtZero: true } }
             }
         });
+
+        // --- Trend Chart ---
+        function loadTrendChart() {
+            fetch('/api/trend_data?days=30')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length === 0) return; // No data yet
+
+                    const ctx = document.getElementById('trendChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.map(d => d.timestamp),
+                            datasets: [{
+                                label: 'Total Indicators',
+                                data: data.map(d => d.total_indicators),
+                                borderColor: 'rgb(75, 192, 192)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                                tension: 0.3,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: { y: { beginAtZero: true } },
+                            interaction: {
+                                mode: 'index',
+                                intersect: false,
+                            }
+                        }
+                    });
+                });
+        }
+        loadTrendChart();
 
         // --- Status Updates ---
         function updateStatus() {
@@ -801,32 +823,121 @@
                 });
         }
 
+        function testFeedConnection(btnElement) {
+            const form = btnElement.closest('form');
+            const url = form.querySelector('[name="url"]').value;
+            const format = form.querySelector('[name="format"]').value;
+            const key = form.querySelector('[name="key_or_column"]').value;
+            const name = form.querySelector('[name="name"]').value;
+            
+            if(!url) {
+                alert('Please enter a URL first.');
+                return;
+            }
+
+            // Show loading state on button
+            const originalText = btnElement.innerHTML;
+            btnElement.disabled = true;
+            btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+            fetch('/api/test_feed', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    name: name,
+                    url: url,
+                    format: format,
+                    key_or_column: key
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                let msg = data.message;
+                if(data.sample && data.sample.length > 0) {
+                    msg += '\n\nSample Data (First 5):\n' + data.sample.join('\n');
+                }
+                alert(msg);
+            })
+            .catch(error => {
+                alert('Error testing feed: ' + error);
+            })
+            .finally(() => {
+                btnElement.disabled = false;
+                btnElement.innerHTML = originalText;
+            });
+        }
+
+        function toggleTaxiiFields(selectElement) {
+            const form = selectElement.closest('form');
+            const taxiiFields = form.querySelectorAll('.taxii-field');
+            const standardFields = form.querySelectorAll('.standard-field'); 
+            
+            if (selectElement.value === 'taxii') {
+                taxiiFields.forEach(el => el.style.display = 'block');
+                standardFields.forEach(el => el.style.display = 'none');
+            } else {
+                taxiiFields.forEach(el => el.style.display = 'none');
+                standardFields.forEach(el => el.style.display = 'block');
+            }
+        }
+
         // --- Live Logs Polling ---
         let logInterval = null;
         const logModal = document.getElementById('logModal');
         const terminalWindow = document.getElementById('terminal-window');
 
         function fetchLiveLogs() {
+            const filterText = document.getElementById('logFilterInput').value.toLowerCase();
+            const filterLevel = document.getElementById('logLevelSelect').value;
+            const hidePolling = document.getElementById('hidePollingLogs').checked;
+
             fetch('/api/live_logs')
                 .then(response => response.json())
                 .then(logs => {
                     terminalWindow.innerHTML = ''; // Clear current
                     logs.forEach(log => {
-                        let levelClass = 'text-white';
-                        if (log.includes('INFO')) levelClass = 'log-level-INFO';
-                        if (log.includes('WARNING')) levelClass = 'log-level-WARNING';
-                        if (log.includes('ERROR')) levelClass = 'log-level-ERROR';
-
-                        const div = document.createElement('div');
-                        div.className = 'log-entry';
-                        // Basic formatting
-                        const parts = log.split(' - ');
-                        if (parts.length >= 4) {
-                            div.innerHTML = `<span class="log-time">${parts[0]}</span> <span class="${levelClass}">${parts[1]}</span> ${parts.slice(2).join(' - ')}`;
-                        } else {
-                            div.innerText = log;
+                        // 1. Polling Filter (Hide API noise)
+                        if (hidePolling) {
+                            if (log.includes('GET /api/history') || log.includes('GET /api/live_logs') || log.includes('GET /status')) {
+                                return; // Skip this log
+                            }
                         }
-                        terminalWindow.appendChild(div);
+
+                        // 2. Level Filter
+                        let show = true;
+                        if (filterLevel !== 'ALL') {
+                            if (filterLevel === 'ERROR' && !log.includes('ERROR')) show = false;
+                            else if (filterLevel === 'WARNING' && !log.includes('WARNING') && !log.includes('ERROR')) show = false;
+                            else if (filterLevel === 'INFO' && !log.includes('INFO') && !log.includes('WARNING') && !log.includes('ERROR')) show = false;
+                        }
+
+                        // 3. Text Search Filter
+                        if (show && filterText && !log.toLowerCase().includes(filterText)) {
+                            show = false;
+                        }
+
+                        if (show) {
+                            let levelClass = 'text-white';
+                            if (log.includes('INFO')) levelClass = 'log-level-INFO';
+                            if (log.includes('WARNING')) levelClass = 'log-level-WARNING';
+                            if (log.includes('ERROR')) levelClass = 'log-level-ERROR';
+
+                            const div = document.createElement('div');
+                            div.className = 'log-entry';
+                            // Basic formatting
+                            const parts = log.split(' - ');
+                            if (parts.length >= 4) {
+                                div.innerHTML = `<span class="log-time">${parts[0]}</span> <span class="${levelClass}">${parts[1]}</span> ${parts.slice(2).join(' - ')}`;
+                            } else {
+                                div.innerText = log;
+                            }
+                            terminalWindow.appendChild(div);
+                        }
                     });
                     // Auto scroll to bottom
                     terminalWindow.scrollTop = terminalWindow.scrollHeight;

@@ -2,13 +2,16 @@ import logging
 import os
 import json
 import threading
+import zipfile
+import io
+import shutil
 from datetime import datetime, timezone
 from functools import wraps
 
 # Configure root logger immediately
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 
-from flask import Flask, render_template, redirect, url_for, send_from_directory, request, jsonify, session, flash
+from flask import Flask, render_template, redirect, url_for, send_from_directory, send_file, request, jsonify, session, flash
 from tzlocal import get_localzone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -16,7 +19,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from flask_wtf.csrf import CSRFProtect
 
 from .config_manager import read_config, write_config, read_stats, write_stats, BASE_DIR, DATA_DIR, CONFIG_FILE, STATS_FILE
-from .aggregator import main as run_aggregator, fetch_and_process_single_feed, CURRENT_JOB_STATUS, regenerate_edl_files
+from .aggregator import main as run_aggregator, fetch_and_process_single_feed, CURRENT_JOB_STATUS, regenerate_edl_files, test_feed_source
 from .microsoft_services import process_microsoft_feeds
 from .github_services import process_github_feeds
 from .azure_services import process_azure_feeds
@@ -35,7 +38,8 @@ from .db_manager import (
     get_admin_password_hash,
     get_indicator_counts_by_type,
     get_job_history,
-    clear_job_history
+    clear_job_history,
+    get_historical_stats
 )
 from .cert_manager import generate_self_signed_cert, process_pfx_upload, get_cert_paths
 from .auth_manager import check_credentials
@@ -196,11 +200,37 @@ def index():
 
     return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template, total_indicator_count=total_indicator_count, indicator_counts_by_type=indicator_counts_by_type, whitelist=whitelist, country_stats=country_stats, safe_list=safe_list_sorted)
 
+@app.route('/system')
+@login_required
+def system_settings():
+    config = read_config()
+    return render_template('system.html', config=config)
+
 @app.route('/api/status_detailed')
 @login_required
 def status_detailed():
     """Returns detailed status of currently running jobs."""
     return jsonify(CURRENT_JOB_STATUS)
+
+@app.route('/api/trend_data')
+@login_required
+def trend_data():
+    """Returns historical stats for the chart."""
+    days = request.args.get('days', default=30, type=int)
+    data = get_historical_stats(days)
+    
+    # Format dates for Chart.js
+    local_tz = get_localzone()
+    formatted_data = []
+    for row in data:
+        try:
+            dt = datetime.fromisoformat(row['timestamp'])
+            row['timestamp'] = dt.astimezone(local_tz).strftime('%Y-%m-%d %H:%M')
+            formatted_data.append(row)
+        except:
+            pass
+            
+    return jsonify(formatted_data)
 
 @app.route('/api/history')
 @login_required
@@ -287,6 +317,71 @@ def api_update_azure():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 
+@app.route('/api/backup', methods=['GET'])
+@login_required
+def backup_system():
+    try:
+        # Create in-memory zip
+        memory_file = io.BytesIO()
+        with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # Files to backup
+            files_to_backup = ['config.json', 'threat_feed.db', 'safe_list.txt', 'jobs.sqlite']
+            
+            for filename in files_to_backup:
+                file_path = os.path.join(DATA_DIR, filename)
+                if os.path.exists(file_path):
+                    zf.write(file_path, filename)
+        
+        memory_file.seek(0)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        return send_file(
+            memory_file,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f'threat_feed_backup_{timestamp}.zip'
+        )
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/restore', methods=['POST'])
+@login_required
+def restore_system():
+    if 'backup_file' not in request.files:
+        flash('No file part', 'danger')
+        return redirect(url_for('index'))
+        
+    file = request.files['backup_file']
+    if file.filename == '':
+        flash('No selected file', 'danger')
+        return redirect(url_for('index'))
+        
+    if file and file.filename.endswith('.zip'):
+        try:
+            # Securely extract
+            with zipfile.ZipFile(file) as zf:
+                # Validate contents first
+                valid_files = ['config.json', 'threat_feed.db', 'safe_list.txt', 'jobs.sqlite']
+                file_names = zf.namelist()
+                
+                # Check for path traversal or invalid files
+                for name in file_names:
+                    if name not in valid_files or '..' in name or name.startswith('/'):
+                        raise ValueError(f"Invalid file in archive: {name}")
+                
+                # Extract
+                zf.extractall(DATA_DIR)
+                
+            flash('System restored successfully. Configuration reloaded.', 'success')
+            update_scheduled_jobs() # Reload config
+            return redirect(url_for('index'))
+            
+        except Exception as e:
+            flash(f'Error restoring backup: {str(e)}', 'danger')
+            return redirect(url_for('index'))
+    else:
+        flash('Invalid file format. Please upload a .zip file.', 'danger')
+        return redirect(url_for('index'))
+
 @app.route('/api/safe_list/add', methods=['POST'])
 @login_required
 def add_safe_list_item():
@@ -311,6 +406,36 @@ def remove_safe_list_item():
             flash(f'Error removing from Safe List: {message}', 'danger')
     return redirect(url_for('index'))
 
+@app.route('/api/test_feed', methods=['POST'])
+@login_required
+def api_test_feed():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No data provided'})
+        
+        name = data.get('name', 'Test')
+        url = data.get('url')
+        data_format = data.get('format', 'text')
+        key_or_column = data.get('key_or_column')
+        
+        source_config = {
+            "name": name,
+            "url": url,
+            "format": data_format,
+            "key_or_column": key_or_column
+        }
+        
+        success, message, sample = test_feed_source(source_config)
+        
+        return jsonify({
+            'status': 'success' if success else 'error',
+            'message': message,
+            'sample': sample
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
 @app.route('/add', methods=['POST'])
 @login_required
 def add_url():
@@ -321,6 +446,11 @@ def add_url():
     schedule_interval_minutes = request.form.get('schedule_interval_minutes', type=int)
     confidence = request.form.get('confidence', default=50, type=int)
     retention_days = request.form.get('retention_days', type=int)
+    
+    # TAXII params
+    collection_id = request.form.get('collection_id')
+    username = request.form.get('username')
+    password = request.form.get('password')
     
     if name and url:
         config = read_config()
@@ -336,6 +466,11 @@ def add_url():
             new_source["schedule_interval_minutes"] = schedule_interval_minutes
         if retention_days:
             new_source["retention_days"] = retention_days
+        
+        # Save TAXII params
+        if collection_id: new_source["collection_id"] = collection_id
+        if username: new_source["username"] = username
+        if password: new_source["password"] = password
             
         config["source_urls"].append(new_source)
         write_config(config)
@@ -352,6 +487,11 @@ def update_url(index):
     schedule_interval_minutes = request.form.get('schedule_interval_minutes', type=int)
     confidence = request.form.get('confidence', default=50, type=int)
     retention_days = request.form.get('retention_days', type=int)
+
+    # TAXII params
+    collection_id = request.form.get('collection_id')
+    username = request.form.get('username')
+    password = request.form.get('password')
 
     if name and url:
         config = read_config()
@@ -375,6 +515,14 @@ def update_url(index):
             else:
                 if "retention_days" in updated_source:
                     del updated_source["retention_days"]
+
+            # TAXII Update Logic
+            if collection_id:
+                updated_source["collection_id"] = collection_id
+            if username:
+                updated_source["username"] = username
+            if password:
+                updated_source["password"] = password
 
             config["source_urls"][index] = updated_source
             write_config(config)

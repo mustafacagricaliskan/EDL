@@ -14,7 +14,8 @@ from .db_manager import (
     delete_whitelisted_indicators as db_delete_whitelisted_indicators,
     log_job_start,
     log_job_end,
-    recalculate_scores
+    recalculate_scores,
+    save_historical_stats
 )
 from .utils import is_whitelisted # Import is_whitelisted for cleanup
 from .geoip_manager import get_country_code
@@ -106,22 +107,39 @@ def aggregate_single_source(source_config, recalculate=True):
     fetch_duration = 0
 
     try:
-        raw_data = fetch_data_from_url(url)
-        end_time_fetch = time.time()
-        fetch_duration = end_time_fetch - start_time_fetch
+        raw_data = None
+        items_with_type = []
+
+        if data_format == "taxii":
+            from .taxii_services import fetch_and_parse_taxii
+            username = source_config.get("username")
+            password = source_config.get("password")
+            collection_id = source_config.get("collection_id")
+            
+            # Fetch and Parse in one go for TAXII
+            items_with_type = fetch_and_parse_taxii(url, collection_id, username, password)
+            raw_data = "TAXII_PROCESSED" # Dummy value to proceed
+            
+            end_time_fetch = time.time()
+            fetch_duration = end_time_fetch - start_time_fetch
+        else:
+            raw_data = fetch_data_from_url(url)
+            end_time_fetch = time.time()
+            fetch_duration = end_time_fetch - start_time_fetch
         
         if raw_data:
             update_job_status(name, "Parsing", "Parsing data format...")
-            items_with_type = []
             
-            if data_format == "text":
-                items_with_type = parse_mixed_text(raw_data, source_name=name)
-            elif data_format == "json":
-                items = parse_json(raw_data, key=key_or_column)
-                items_with_type = [(item, identify_indicator_type(item)) for item in items]
-            elif data_format == "csv":
-                items = parse_csv(raw_data, column=key_or_column)
-                items_with_type = [(item, identify_indicator_type(item)) for item in items]
+            # If not TAXII, we need to parse the raw text/json
+            if data_format != "taxii":
+                if data_format == "text":
+                    items_with_type = parse_mixed_text(raw_data, source_name=name)
+                elif data_format == "json":
+                    items = parse_json(raw_data, key=key_or_column)
+                    items_with_type = [(item, identify_indicator_type(item)) for item in items]
+                elif data_format == "csv":
+                    items = parse_csv(raw_data, column=key_or_column)
+                    items_with_type = [(item, identify_indicator_type(item)) for item in items]
                 
             items_with_type = [(item, item_type) for item, item_type in items_with_type if item and item_type != "unknown"]
 
@@ -291,5 +309,62 @@ def main(source_urls):
     current_stats["last_updated"] = datetime.now(timezone.utc).isoformat()
     write_stats(current_stats)
 
+    save_historical_stats() # Save trend data
     regenerate_edl_files() 
     return {"url_counts": all_url_counts, "processed_data": []}
+
+def test_feed_source(source_config):
+    """
+    Tests a feed source connection and parsing without saving to DB.
+    Returns: (success, message, sample_data)
+    """
+    name = source_config.get("name", "Test Source")
+    url = source_config["url"]
+    data_format = source_config.get("format", "text")
+    key_or_column = source_config.get("key_or_column")
+
+    try:
+        # Check URL validity (basic)
+        if not url or not url.startswith(('http://', 'https://')):
+             return False, "Invalid URL format.", []
+
+        raw_data = None
+        items_with_type = []
+
+        if data_format == "taxii":
+            from .taxii_services import fetch_and_parse_taxii
+            username = source_config.get("username")
+            password = source_config.get("password")
+            collection_id = source_config.get("collection_id")
+            
+            items_with_type = fetch_and_parse_taxii(url, collection_id, username, password)
+            raw_data = "TAXII_PROCESSED"
+        else:
+            raw_data = fetch_data_from_url(url)
+        
+        if not raw_data:
+            return False, "No data fetched from URL (Empty response or connection failed).", []
+
+        if data_format != "taxii":
+            if data_format == "text":
+                items_with_type = parse_mixed_text(raw_data, source_name=name)
+            elif data_format == "json":
+                items = parse_json(raw_data, key=key_or_column)
+                items_with_type = [(item, identify_indicator_type(item)) for item in items]
+            elif data_format == "csv":
+                items = parse_csv(raw_data, column=key_or_column)
+                items_with_type = [(item, identify_indicator_type(item)) for item in items]
+
+        # Filter unknown types
+        valid_items = [item for item, item_type in items_with_type if item and item_type != "unknown"]
+        
+        count = len(valid_items)
+        sample = valid_items[:5] # Return top 5
+        
+        if count == 0:
+             return False, "Data fetched but no valid indicators found. Check format/parsing settings.", []
+             
+        return True, f"Success! Found {count} valid indicators.", sample
+        
+    except Exception as e:
+        return False, f"Error testing feed: {str(e)}", []

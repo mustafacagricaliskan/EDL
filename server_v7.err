@@ -1,0 +1,102 @@
+2025-12-17 03:49:38,260 - ERROR - root - Environment variable 'SECRET_KEY' is not set. Please set it for production use.
+2025-12-17 03:49:38,270 - WARNING - root - Environment variable 'ADMIN_PASSWORD' is not set.
+2025-12-17 03:49:38,275 - INFO - apscheduler.scheduler - Scheduler started
+2025-12-17 03:49:38,282 - INFO - apscheduler.scheduler - Added job "fetch_and_process_single_feed" to job store "default"
+2025-12-17 03:49:38,284 - INFO - apscheduler.scheduler - Added job "fetch_and_process_single_feed" to job store "default"
+2025-12-17 03:49:38,288 - INFO - apscheduler.scheduler - Added job "fetch_and_process_single_feed" to job store "default"
+2025-12-17 03:49:38,291 - INFO - apscheduler.scheduler - Added job "fetch_and_process_single_feed" to job store "default"
+2025-12-17 03:49:38,305 - INFO - werkzeug - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:443
+ * Running on https://192.168.1.2:443
+2025-12-17 03:49:38,305 - INFO - werkzeug - [33mPress CTRL+C to quit[0m
+2025-12-17 03:50:09,360 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:09] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:50:50,248 - INFO - root - Indicator Counts: {'cidr': 5136, 'domain': 425487, 'ip': 37510}
+2025-12-17 03:50:50,304 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:50] "GET / HTTP/1.1" 200 -
+2025-12-17 03:50:50,582 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:50] "GET /api/trend_data?days=30 HTTP/1.1" 200 -
+2025-12-17 03:50:50,612 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:50] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:50:50,618 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:50] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:50:52,006 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:52] "GET /system HTTP/1.1" 200 -
+2025-12-17 03:50:54,185 - INFO - root - Indicator Counts: {'cidr': 5136, 'domain': 425487, 'ip': 37510}
+2025-12-17 03:50:54,223 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:54] "GET / HTTP/1.1" 200 -
+2025-12-17 03:50:54,457 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:54] "GET /api/trend_data?days=30 HTTP/1.1" 200 -
+2025-12-17 03:50:54,471 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:54] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:50:54,478 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:54] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:50:57,452 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:57] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:50:57,457 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:57] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:50:57,749 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:50:57] "GET /system HTTP/1.1" 200 -
+2025-12-17 03:51:03,530 - INFO - root - Indicator Counts: {'cidr': 5136, 'domain': 425487, 'ip': 37510}
+2025-12-17 03:51:03,567 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:03] "GET / HTTP/1.1" 200 -
+2025-12-17 03:51:03,809 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:03] "GET /api/trend_data?days=30 HTTP/1.1" 200 -
+2025-12-17 03:51:03,850 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:03] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:03,856 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:03] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:06,715 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:06] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:06,721 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:06] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:09,360 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:09] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:09,366 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:09] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:09,715 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:09] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:09,721 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:09] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:12,723 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:12] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:12,740 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:12] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:15,730 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:15] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:15,736 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:15] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:16,832 - INFO - root - Aggregation task started in a new thread.
+2025-12-17 03:51:16,833 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:16] "GET /run HTTP/1.1" 200 -
+2025-12-17 03:51:16,973 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:16] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:16,979 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:16] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:17,111 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:17] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:18,034 - INFO - threat_feed_aggregator.db_manager - Cleanup: Removed 0 expired source links and 8153 orphaned indicators.
+2025-12-17 03:51:18,714 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:18] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:18,721 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:18] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:18,744 - INFO - threat_feed_aggregator.parsers - [feodo_ips] Starting parse of 11 lines...
+2025-12-17 03:51:18,744 - INFO - threat_feed_aggregator.parsers - [feodo_ips] Parsing completed. Total items: 1
+2025-12-17 03:51:18,746 - INFO - threat_feed_aggregator.aggregator - [feodo_ips] Starting DB upsert for 1 items in 1 batches.
+2025-12-17 03:51:18,750 - INFO - threat_feed_aggregator.aggregator - [feodo_ips] Written batch 1/1 (1 items)
+2025-12-17 03:51:18,851 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:18] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:19,354 - INFO - threat_feed_aggregator.parsers - [firehol_level1] Starting parse of 4542 lines...
+2025-12-17 03:51:19,363 - INFO - threat_feed_aggregator.parsers - [firehol_level1] Parsing completed. Total items: 4509
+2025-12-17 03:51:19,409 - INFO - threat_feed_aggregator.aggregator - [firehol_level1] Starting DB upsert for 4506 items in 1 batches.
+2025-12-17 03:51:19,443 - INFO - threat_feed_aggregator.aggregator - [firehol_level1] Written batch 1/1 (4506 items)
+2025-12-17 03:51:19,747 - INFO - threat_feed_aggregator.parsers - [firehol_level2] Starting parse of 16902 lines...
+2025-12-17 03:51:19,770 - INFO - threat_feed_aggregator.parsers - [firehol_level2] Parsing completed. Total items: 16871
+2025-12-17 03:51:21,714 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:21] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:21,727 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:21] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:21,842 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:21] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:22,187 - INFO - threat_feed_aggregator.aggregator - [firehol_level2] Starting DB upsert for 16871 items in 4 batches.
+2025-12-17 03:51:22,215 - INFO - threat_feed_aggregator.aggregator - [firehol_level2] Written batch 1/4 (5000 items)
+2025-12-17 03:51:22,243 - INFO - threat_feed_aggregator.aggregator - [firehol_level2] Written batch 2/4 (5000 items)
+2025-12-17 03:51:22,270 - INFO - threat_feed_aggregator.aggregator - [firehol_level2] Written batch 3/4 (5000 items)
+2025-12-17 03:51:22,285 - INFO - threat_feed_aggregator.aggregator - [firehol_level2] Written batch 4/4 (1871 items)
+2025-12-17 03:51:24,714 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:24] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:24,720 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:24] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:24,852 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:24] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:27,727 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:27] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:27,733 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:27] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:27,853 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:27] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:30,717 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:30] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:30,723 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:30] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:30,842 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:30] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:34,286 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:34] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:34,301 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:34] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:34,422 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:34] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:37,278 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:37] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:37,291 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:37] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:37,410 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:37] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:40,293 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:40] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:40,309 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:40] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:40,446 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:40] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:43,292 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:43] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:43,312 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:43] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:43,426 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:43] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:46,293 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:46] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:46,299 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:46] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:46,416 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:46] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:49,302 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:49] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:49,312 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:49] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:49,439 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:49] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:52,294 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:52] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:52,300 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:52] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:52,433 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:52] "GET /api/status_detailed HTTP/1.1" 200 -
+2025-12-17 03:51:55,302 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:55] "GET /status HTTP/1.1" 200 -
+2025-12-17 03:51:55,318 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:55] "GET /api/history HTTP/1.1" 200 -
+2025-12-17 03:51:55,439 - INFO - werkzeug - 127.0.0.1 - - [17/Dec/2025 03:51:55] "GET /api/status_detailed HTTP/1.1" 200 -

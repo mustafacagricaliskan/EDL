@@ -1,0 +1,117 @@
+apiVersion: v1
+kind: List
+items:
+  # 1. Config & Secrets
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: threat-feed-secrets
+    type: Opaque
+    stringData:
+      # Change these in production!
+      SECRET_KEY: "change-me-to-a-secure-random-string-openshift"
+      ADMIN_PASSWORD: "openshift-admin-123"
+
+  # 2. Persistent Storage for DB and Config
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: threat-feed-data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+
+  # 3. Application Deployment
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: threat-feed-aggregator
+      labels:
+        app: threat-feed-aggregator
+    spec:
+      replicas: 1 # SQLite requires single writer
+      strategy:
+        type: Recreate # Ensure old pod dies before new one starts to release DB lock
+      selector:
+        matchLabels:
+          app: threat-feed-aggregator
+      template:
+        metadata:
+          labels:
+            app: threat-feed-aggregator
+        spec:
+          containers:
+            - name: threat-feed-aggregator
+              # Replace with your image registry path
+              # Example: image-registry.openshift-image-registry.svc:5000/<project>/threat-feed-aggregator:latest
+              image: threat-feed-aggregator:latest 
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 8080
+                  protocol: TCP
+              env:
+                - name: PORT
+                  value: "8080"
+                - name: SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: threat-feed-secrets
+                      key: SECRET_KEY
+                - name: ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: threat-feed-secrets
+                      key: ADMIN_PASSWORD
+              volumeMounts:
+                - name: data-volume
+                  mountPath: /app/threat_feed_aggregator/data
+              livenessProbe:
+                httpGet:
+                  path: /login
+                  port: 8080
+                  scheme: HTTPS
+                initialDelaySeconds: 15
+                timeoutSeconds: 5
+              readinessProbe:
+                httpGet:
+                  path: /login
+                  port: 8080
+                  scheme: HTTPS
+                initialDelaySeconds: 10
+                timeoutSeconds: 5
+          volumes:
+            - name: data-volume
+              persistentVolumeClaim:
+                claimName: threat-feed-data
+
+  # 4. Internal Service
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: threat-feed-service
+    spec:
+      selector:
+        app: threat-feed-aggregator
+      ports:
+        - protocol: TCP
+          port: 8080
+          targetPort: 8080
+
+  # 5. External Route (HTTPS)
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: threat-feed-route
+    spec:
+      to:
+        kind: Service
+        name: threat-feed-service
+      port:
+        targetPort: 8080
+      tls:
+        termination: passthrough # Let the container handle SSL (since app runs HTTPS)
+        # Alternatively use 'edge' termination if you want OpenShift to handle SSL
+        # If using 'edge', change livenessProbe scheme to HTTP and app config to run HTTP.

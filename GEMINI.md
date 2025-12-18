@@ -15,6 +15,13 @@ This project is a web-based Threat Feed Aggregator built with Flask. Its purpose
 *   **Output Formatting:** Generates downloadable External Dynamic Lists (EDLs) for Palo Alto Networks and Fortinet.
 *   **User Authentication:** Basic login functionality with optional LDAP integration.
 
+## Recent Major Updates (v1.4 - IP Investigation Tool)
+
+### 1. New Investigation Capabilities
+*   **IP Investigation Tool:** A new dedicated dashboard page (`/tools/investigate`) allows analysts to manually query IP addresses.
+*   **Reverse DNS & Hosting Data:** Integrated with **ip.thc.org** API to retrieve and display domains hosted on a specific IP address, providing crucial context for threat analysis.
+*   **Contextual Map Links:** Direct links to Google Maps for IP geolocation visualization.
+
 ## Recent Major Updates (v1.3 - Refactoring & Architecture)
 
 ### 1. Modernized Architecture (AsyncIO & Modularization)

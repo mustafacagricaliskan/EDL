@@ -13,6 +13,11 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    make \
+    file \
+    autoconf \
+    automake \
+    libtool \
     libldap2-dev \
     libsasl2-dev \
     libssl-dev \

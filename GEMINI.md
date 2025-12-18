@@ -15,25 +15,25 @@ This project is a web-based Threat Feed Aggregator built with Flask. Its purpose
 *   **Output Formatting:** Generates downloadable External Dynamic Lists (EDLs) for Palo Alto Networks and Fortinet.
 *   **User Authentication:** Basic login functionality with optional LDAP integration.
 
-## Recent Major Updates (v1.2)
+## Recent Major Updates (v1.3 - Refactoring & Architecture)
 
-### 1. Enhanced User Interface (Soft UI & Modern Design)
-*   **Soft UI Theme:** Replaced the previous dark/cyberpunk theme with a clean, modern light "Soft UI" design, enhancing readability and aesthetics.
-*   **Optimized Layout:** Redesigned the Dashboard layout for better visual hierarchy and module placement:
-    *   Top: Modern statistical cards with icons.
-    *   Middle: Threat Map and 30-Day Trend Chart, now stacked for better visibility.
-    *   Main Column: Active Sources list and Job History.
-    *   Side Column: Consolidated action cards (Add Source, External Intelligence Feeds, Exports, Access Control).
+### 1. Modernized Architecture (AsyncIO & Modularization)
+*   **Asynchronous Processing:** The core aggregation engine (`aggregator.py`) has been rewritten using `asyncio` and `aiohttp`. This allows for concurrent fetching of threat feeds, significantly improving performance when dealing with multiple sources. Database operations are handled in a non-blocking manner using thread executors.
+*   **Flask Blueprints:** The monolithic `app.py` has been refactored into a modular Blueprint structure. Routes are now organized in `routes/` directory (`dashboard.py`, `api.py`, `auth.py`, `system.py`), making the codebase cleaner and easier to maintain.
+*   **Dependency Injection:** The `db_manager.py` module now supports dependency injection via a context manager, enabling better testability and transaction management.
+*   **Factory Pattern:** A `get_parser` factory has been implemented in `parsers.py` to standardize how different feed formats (Text, JSON, CSV, TAXII) are handled.
+
+### 2. Enhanced User Interface (Soft UI & Modern Design)
+*   **Soft UI Theme:** Clean, modern light "Soft UI" design.
+*   **Live Logs:** Improved visibility of live application logs with a high-contrast terminal-like window in the dashboard.
 *   **Responsive Design:** Improved responsiveness for better display on various screen sizes.
-*   **SweetAlert2 Integration:** Replaced standard browser alerts and confirms with modern, animated SweetAlert2 pop-ups for a better user experience.
-*   **Interactive World Map:** Replaced the static country bar chart with an interactive jsVectorMap for visualizing threat origins.
+*   **SweetAlert2 Integration:** Modern pop-ups for alerts and confirmations.
+*   **Interactive World Map:** `jsVectorMap` for visualizing threat origins.
 
-### 2. Operational & Security Enhancements
-*   **Dedicated System Settings Page:** Moved all system-level configurations (General Settings, SSL, LDAP, Admin Password, Backup/Restore) to a separate `/system` page, decluttering the main Dashboard.
-*   **Feed Test Button:** Added a "Test Connection" button to feed configuration forms, allowing users to validate feed URLs and parsing settings before saving.
-*   **Time-Based Trend Graphs:** Implemented historical data collection for total indicators, providing a 30-day trend chart on the Dashboard.
-*   **Backup & Restore:** Added functionality for one-click backup of all critical data (`.db`, `config.json`, `safe_list.txt`) to a ZIP archive and restoration from a ZIP file via the System Settings page.
-*   **Offline Mode:** All external CSS, JavaScript, and FontAwesome files are now hosted locally in `static/vendor/` directories, allowing the application to function fully without an internet connection.
+### 3. Deployment & Security
+*   **Rootless Docker:** The Docker configuration (`Dockerfile` and `docker-compose.yml`) has been updated to run as a non-root user (UID 1001) for enhanced security.
+*   **Port Mapping:** The container internally listens on port 8080 (unprivileged), mapped to host port 443 (or other) via Docker Compose.
+*   **Python 3.13 Compatibility:** Updated dependencies to ensure compatibility with Python 3.13 (replaced `uvloop` with standard `asyncio` due to build issues).
 
 ## Getting Started
 
@@ -82,7 +82,7 @@ The Flask application can be run directly as a Python module. Ensure your virtua
 ```bash
 python -m threat_feed_aggregator.app
 ```
-The application will typically be accessible at `https://127.0.0.1:443`. You will see console output as the application starts and processes feeds. Your browser might warn about a self-signed certificate, which you can safely bypass for local development.
+The application will typically be accessible at `https://127.0.0.1:443` (or the port defined in ENV).
 
 **Login Credentials:**
 - Username: `admin`
@@ -90,7 +90,7 @@ The application will typically be accessible at `https://127.0.0.1:443`. You wil
 
 ### 2. Docker Deployment
 
-The project is configured for easy deployment using Docker.
+The project is configured for easy deployment using Docker (Rootless).
 
 **a. Environment Setup:**
 Place your `.env` file (copied from `.env.example` with your secrets) in the project root (`EDL/`).
@@ -100,10 +100,10 @@ Navigate to the project root (`EDL/`) and run:
 ```bash
 docker-compose up -d --build
 ```
-This command will build the Docker image, create a container, and run it in detached mode.
+This command will build the Docker image, create a container running as user 1001, and map port 443 (host) to 8080 (container).
 
 **c. Access the Application:**
-The application will be accessible via HTTPS at `https://localhost`. Your browser might warn about a self-signed certificate.
+The application will be accessible via HTTPS at `https://localhost`.
 
 **d. Data Persistence:**
 The `threat-feed-aggregator/data/` directory on your host machine is mapped as a Docker volume to `/app/threat_feed_aggregator/data` inside the container. This ensures your data persists even if the Docker container is removed or recreated.
@@ -119,48 +119,31 @@ docker-compose down
 The application is configured for OpenShift/Kubernetes, prioritizing non-root execution and persistent storage.
 
 **a. Build the Docker Image:**
-First, build your Docker image and push it to an accessible registry (e.g., OpenShift's internal registry, Docker Hub, Quay.io).
+First, build your Docker image and push it to an accessible registry.
 ```bash
 docker build -t threat-feed-aggregator:latest ./threat-feed-aggregator
-# Replace 'your-registry/your-project/threat-feed-aggregator:latest' with your actual registry path
-docker tag threat-feed-aggregator:latest your-registry/your-project/threat-feed-aggregator:latest
 docker push your-registry/your-project/threat-feed-aggregator:latest
 ```
 
-**b. Deploy to OpenShift:**
-1.  **Login to OpenShift:**
-    ```bash
-    oc login ...
-    oc new-project threat-feed-aggregator-project # Or use an existing project
-    ```
-2.  **Update Deployment Manifest:**
-    *   Open `openshift/deployment.yaml`.
-    *   Update the `image:` field under `containers.threat-feed-aggregator` with the full path to your pushed image (e.g., `your-registry/your-project/threat-feed-aggregator:latest`).
-3.  **Apply Manifests:**
-    ```bash
-    oc apply -f openshift/deployment.yaml
-    ```
-    This will create a `Secret` for credentials, a `PersistentVolumeClaim` for data, a `Deployment` to run the application, a `Service` for internal access, and a `Route` to expose it externally via HTTPS.
+**b. Deploy:**
+Apply the manifests in `openshift/deployment.yaml`. Ensure you update the image path in the yaml file first.
 
 ## Development Conventions
 
--   **Python Version:** The project uses Python 3.13.
--   **Web Framework:** Flask is used for the web interface.
--   **Scheduler:** APScheduler (with SQLAlchemyJobStore for persistence) is used for scheduling feed updates.
--   **Configuration:** `config.json` stores source URLs and application settings. `threat_feed.db` stores the aggregated unique indicators, whitelist, users, and job history.
--   **Code Structure:** The core logic is modularized within the `threat_feed_aggregator` package.
--   **Testing:** Unit tests are organized under the `tests/` directory.
--   **Version Control:** Git is used for version control.
+-   **Python Version:** Python 3.13.
+-   **Web Framework:** Flask (Modularized with Blueprints).
+-   **Async:** `asyncio` & `aiohttp` for data fetching.
+-   **Scheduler:** APScheduler (with SQLAlchemyJobStore).
+-   **Configuration:** `config.json` & `threat_feed.db`.
+-   **Testing:** Unit tests are organized under the `tests/` directory. Run with `pytest`.
 
 ## Cleanup for Transfer
 
-To prepare the project for transfer to another PC, ensuring no personal data or temporary files are included:
+To prepare the project for transfer to another PC:
 1.  **Stop the Application:** If running, stop it first.
-2.  **Delete Data Files:** Remove all database (`threat_feed.db`, `jobs.sqlite`), generated lists (`*.txt` in `data/`), and SSL certificates (`certs/`) from `threat-feed-aggregator/threat_feed_aggregator/data/` and `threat-feed-aggregator/threat_feed_aggregator/certs/` directories.
-3.  **Remove Log Files:** Delete all `*.log` and `*.err` files from the project root.
-4.  **Remove Example Config:** Delete `threat-feed-aggregator/threat_feed_aggregator/data/config.json` if it exists. Keep `config.json.example`.
-5.  **Clean Python Cache:** Remove `__pycache__` and `.pytest_cache` directories.
-6.  **Exclude `venv/`:** When copying the project, ensure you do not include the `venv/` (virtual environment) directory, as it is specific to your local machine.
+2.  **Delete Temporary Files:** You can safely remove `__pycache__`, `.pytest_cache`, and the `venv/` directory.
+3.  **Data Files:** Decide if you want to keep `threat-feed-aggregator/data/` (contains DB and config). For a clean start on a new machine, exclude `*.db` and `*.sqlite` but keep `config.json`.
+4.  **Zip:** Compress the entire project folder (excluding `venv` and cache).
 
 ## Building an Executable (Windows)
 

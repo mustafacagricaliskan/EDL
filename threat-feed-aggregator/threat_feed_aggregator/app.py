@@ -11,12 +11,18 @@ from .db_manager import init_db, set_admin_password, get_admin_password_hash
 from .cert_manager import generate_self_signed_cert, get_cert_paths
 from .log_manager import setup_memory_logging
 from .aggregator import fetch_and_process_single_feed
+from .version import __version__
 
 # Initialize Memory Logging
 setup_memory_logging()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 
 app = Flask(__name__)
+
+# Context processor to make version available to all templates
+@app.context_processor
+def inject_version():
+    return dict(version=__version__)
 
 # Validate Environment
 SECRET_KEY = os.environ.get('SECRET_KEY')

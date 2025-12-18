@@ -7,6 +7,6 @@ Flask-WTF==1.2.1
 cryptography==41.0.7
 ldap3==2.9.1
 geoip2==4.7.0
-gunicorn==21.2.0
+gunicorn==22.0.0
 # Optional for better performance
 

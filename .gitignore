@@ -21,6 +21,7 @@ Python.h
 # Logs and databases
 *.log
 *.sqlite
+*.db
 db.json
 stats.json
 

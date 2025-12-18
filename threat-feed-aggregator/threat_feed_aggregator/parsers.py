@@ -11,6 +11,35 @@ logger = logging.getLogger(__name__)
 URL_PATTERN = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+")
 DOMAIN_PATTERN = re.compile(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$")
 
+def identify_indicator_type(indicator):
+    """
+    Identifies the type of the given indicator (IP, CIDR, Domain, URL, or Unknown).
+    """
+    indicator = indicator.strip()
+    if not indicator:
+        return "unknown"
+
+    # Check for IP address or CIDR
+    try:
+        if '/' in indicator:
+            ipaddress.ip_network(indicator, strict=False)
+            return "cidr"
+        else:
+            ipaddress.ip_address(indicator)
+            return "ip"
+    except ValueError:
+        pass # Not an IP or CIDR
+
+    # Check for URL
+    if URL_PATTERN.match(indicator):
+        return "url"
+
+    # Check for Domain
+    if DOMAIN_PATTERN.match(indicator):
+         return "domain"
+
+    return "unknown"
+
 def parse_text(raw_data):
     """
     Parses plain text data, with one indicator per line.
@@ -44,36 +73,7 @@ def parse_csv(raw_data, column=0):
     except (csv.Error, IndexError):
         return []
 
-def identify_indicator_type(indicator):
-    """
-    Identifies the type of the given indicator (IP, CIDR, Domain, URL, or Unknown).
-    """
-    indicator = indicator.strip()
-    if not indicator:
-        return "unknown"
-
-    # Check for IP address or CIDR
-    try:
-        if '/' in indicator:
-            ipaddress.ip_network(indicator, strict=False)
-            return "cidr"
-        else:
-            ipaddress.ip_address(indicator)
-            return "ip"
-    except ValueError:
-        pass # Not an IP or CIDR
-
-    # Check for URL
-    if URL_PATTERN.match(indicator):
-        return "url"
-
-    # Check for Domain
-    if DOMAIN_PATTERN.match(indicator):
-         return "domain"
-
-    return "unknown"
-
-def parse_mixed_text(raw_data, source_name="Unknown"):
+def parse_mixed_text(raw_data, source_name="Unknown", **kwargs):
     """
     Parses mixed text data, identifying indicator types for each line.
     Returns a list of tuples: (indicator_value, indicator_type).
@@ -98,3 +98,31 @@ def parse_mixed_text(raw_data, source_name="Unknown"):
 
     logger.info(f"[{source_name}] Parsing completed. Total items: {len(parsed_items)}")
     return parsed_items
+
+# --- Smart Parsers (Standardized Output) ---
+
+def parse_json_with_type(raw_data, key=None, **kwargs):
+    items = parse_json(raw_data, key)
+    return [(item, identify_indicator_type(item)) for item in items]
+
+def parse_csv_with_type(raw_data, column=0, **kwargs):
+    # Ensure column is an integer
+    try:
+        column = int(column)
+    except (ValueError, TypeError):
+        column = 0
+    items = parse_csv(raw_data, column)
+    return [(item, identify_indicator_type(item)) for item in items]
+
+def get_parser(format_type):
+    """
+    Factory to get the parsing function based on format.
+    The returned function always accepts (raw_data, **kwargs) and returns [(indicator, type), ...].
+    """
+    parsers = {
+        'text': parse_mixed_text, # Default text parser to mixed as it's safer
+        'json': parse_json_with_type,
+        'csv': parse_csv_with_type,
+        'mixed': parse_mixed_text
+    }
+    return parsers.get(format_type, parse_mixed_text)

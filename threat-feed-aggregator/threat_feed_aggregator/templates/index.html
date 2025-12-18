@@ -26,9 +26,9 @@
     <!-- Sidebar -->
     <div class="sidebar">
         <h4><i class="fas fa-shield-alt me-2"></i> ThreatFeed</h4>
-        <a href="{{ url_for('index') }}" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-        <a href="{{ url_for('system_settings') }}"><i class="fas fa-cogs"></i> System Settings</a>
-        <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <a href="{{ url_for('dashboard.index') }}" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <a href="{{ url_for('system.index') }}"><i class="fas fa-cogs"></i> System Settings</a>
+        <a href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
 
     <!-- Content -->
@@ -190,7 +190,7 @@
                                     <!-- Inline Edit Form (Row) -->
                                     <tr class="collapse" id="edit-{{ loop.index0 }}">
                                         <td colspan="5" class="bg-light p-4">
-                                            <form action="{{ url_for('update_url', index=loop.index0) }}" method="POST">
+                                            <form action="{{ url_for('system.update_source', index=loop.index0) }}" method="POST">
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <div class="row g-3">
                                                     <div class="col-md-3">
@@ -240,7 +240,7 @@
                                                     <div class="col-md-6 d-flex align-items-end justify-content-end gap-2">
                                                         <button type="button" class="btn btn-sm btn-info text-white" onclick="testFeedConnection(this)"><i class="fas fa-flask"></i> Test</button>
                                                         <button type="submit" class="btn btn-sm btn-primary">Update</button>
-                                                        <a href="{{ url_for('remove_url', index=loop.index0) }}" class="btn btn-sm btn-outline-danger" onclick="return confirmAction(event, 'Delete source?')"><i class="fas fa-trash"></i></a>
+                                                        <a href="{{ url_for('system.remove_source', index=loop.index0) }}" class="btn btn-sm btn-outline-danger" onclick="return confirmAction(event, 'Delete source?')"><i class="fas fa-trash"></i></a>
                                                     </div>
                                                 </div>
                                             </form>
@@ -288,7 +288,7 @@
                 <div class="card bg-gradient-primary text-white mb-4" style="background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);">
                     <div class="card-body">
                         <h5 class="card-title fw-bold mb-3"><i class="fas fa-plus-circle me-2"></i> Add Source</h5>
-                        <form action="{{ url_for('add_url') }}" method="POST">
+                        <form action="{{ url_for('system.add_source') }}" method="POST">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <div class="mb-2">
                                 <input type="text" class="form-control form-control-sm border-0 bg-white bg-opacity-25 text-white placeholder-white" name="name" placeholder="Source Name" required>
@@ -348,9 +348,9 @@
                                     <button class="btn btn-sm btn-light text-primary" onclick="updateMS365()"><i class="fas fa-sync"></i></button>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <a href="{{ url_for('download_file', filename='ms365_exchange_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Exchange</a>
-                                    <a href="{{ url_for('download_file', filename='ms365_skype_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Teams</a>
-                                    <a href="{{ url_for('download_file', filename='ms365_sharepoint_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">SharePoint</a>
+                                    <a href="{{ url_for('dashboard.download_file', filename='ms365_exchange_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Exchange</a>
+                                    <a href="{{ url_for('dashboard.download_file', filename='ms365_skype_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Teams</a>
+                                    <a href="{{ url_for('dashboard.download_file', filename='ms365_sharepoint_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">SharePoint</a>
                                 </div>
                             </div>
                             
@@ -364,9 +364,9 @@
                                     <button class="btn btn-sm btn-light text-dark" onclick="updateGitHub()"><i class="fas fa-sync"></i></button>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <a href="{{ url_for('download_file', filename='github_git_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Git</a>
-                                    <a href="{{ url_for('download_file', filename='github_web_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Web</a>
-                                    <a href="{{ url_for('download_file', filename='github_actions_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Actions</a>
+                                    <a href="{{ url_for('dashboard.download_file', filename='github_git_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Git</a>
+                                    <a href="{{ url_for('dashboard.download_file', filename='github_web_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Web</a>
+                                    <a href="{{ url_for('dashboard.download_file', filename='github_actions_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">Actions</a>
                                 </div>
                             </div>
 
@@ -380,8 +380,8 @@
                                     <button class="btn btn-sm btn-light text-info" onclick="updateAzure()"><i class="fas fa-sync"></i></button>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <a href="{{ url_for('download_file', filename='azure_all_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">All IPs</a>
-                                    <a href="{{ url_for('download_file', filename='azure_westeurope_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">West Europe</a>
+                                    <a href="{{ url_for('dashboard.download_file', filename='azure_all_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">All IPs</a>
+                                    <a href="{{ url_for('dashboard.download_file', filename='azure_westeurope_ips.txt') }}" class="badge bg-light text-muted text-decoration-none border">West Europe</a>
                                 </div>
                             </div>
                         </div>
@@ -395,13 +395,13 @@
                     </div>
                     <div class="card-body">
                         <div class="d-grid gap-2">
-                            <a href="{{ url_for('download_file', filename='palo_alto_edl.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
+                            <a href="{{ url_for('dashboard.download_file', filename='palo_alto_edl.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
                                 <i class="fas fa-download me-2"></i> Palo Alto EDL
                             </a>
-                            <a href="{{ url_for('download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
+                            <a href="{{ url_for('dashboard.download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
                                 <i class="fas fa-download me-2"></i> Fortinet EDL
                             </a>
-                            <a href="{{ url_for('download_file', filename='url_list.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
+                            <a href="{{ url_for('dashboard.download_file', filename='url_list.txt') }}" class="btn btn-outline-secondary btn-sm text-start">
                                 <i class="fas fa-download me-2"></i> URL List
                             </a>
                             <button class="btn btn-sm btn-success mt-2" onclick="regenerateLists()">
@@ -430,7 +430,7 @@
                         <div class="tab-content" id="pills-tabContent">
                             <!-- Whitelist Tab -->
                             <div class="tab-pane fade show active" id="pills-white" role="tabpanel">
-                                <form action="{{ url_for('add_whitelist') }}" method="POST" class="mb-3">
+                                <form action="{{ url_for('system.add_whitelist') }}" method="POST" class="mb-3">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <div class="input-group">
                                         <input type="text" class="form-control form-control-sm" name="item" placeholder="IP/CIDR" required>
@@ -441,9 +441,9 @@
                                     <ul class="list-unstyled mb-0 small">
                                     {% if whitelist %}
                                         {% for w in whitelist %}
-                                        <li class="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1">
-                                            <span class="text-truncate" style="max-width: 150px;" title="{{ w.description }}">{{ w.item }}</span>
-                                            <a href="{{ url_for('remove_whitelist', item_id=w.id) }}" class="text-danger"><i class="fas fa-times"></i></a>
+                                        <li class="d-flex justify-content-between align-items-center border-bottom py-1">
+                                            <span>{{ w.item }} <span class="text-muted fst-italic ms-1">{{ w.description }}</span></span>
+                                            <a href="{{ url_for('system.remove_whitelist', item_id=w.id) }}" class="text-danger"><i class="fas fa-times"></i></a>
                                         </li>
                                         {% endfor %}
                                     {% else %}
@@ -455,7 +455,7 @@
                             
                             <!-- Safe List Tab -->
                             <div class="tab-pane fade" id="pills-safe" role="tabpanel">
-                                <form action="{{ url_for('add_safe_list_item') }}" method="POST" class="mb-3">
+                                <form action="{{ url_for('api.add_safe_list_item') }}" method="POST" class="mb-3">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <div class="input-group">
                                         <input type="text" class="form-control form-control-sm" name="item" placeholder="IP/Domain" required>
@@ -467,7 +467,7 @@
                                     {% for item in safe_list %}
                                         <li class="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1 text-success">
                                             <span>{{ item }}</span>
-                                            <form action="{{ url_for('remove_safe_list_item') }}" method="POST" style="display:inline;">
+                                            <form action="{{ url_for('api.remove_safe_list_item') }}" method="POST" style="display:inline;">
                                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <input type="hidden" name="item" value="{{ item }}">
                                                 <button type="submit" class="btn btn-link btn-sm p-0 text-danger" onclick="return confirmAction(event, 'Remove from Safe List?')"><i class="fas fa-times"></i></button>

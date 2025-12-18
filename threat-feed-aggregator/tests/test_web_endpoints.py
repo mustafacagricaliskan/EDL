@@ -15,13 +15,11 @@ class TestWebEndpoints(unittest.TestCase):
         self.client = app.test_client()
         
         # Bypass login for testing protected endpoints requires handling session
-        # But simplest way in Flask-Login/Custom is to mock session or login_required
-        # We'll use a transaction to mock logged_in session
         with self.client.session_transaction() as sess:
             sess['logged_in'] = True
             sess['username'] = 'admin'
 
-    @patch('threat_feed_aggregator.app.process_microsoft_feeds')
+    @patch('threat_feed_aggregator.routes.api.process_microsoft_feeds')
     def test_ms365_endpoint(self, mock_process):
         # Mock success
         mock_process.return_value = (True, "Success")
@@ -35,14 +33,14 @@ class TestWebEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200) # Returns 200 with error status JSON
         self.assertEqual(response.json['status'], 'error')
 
-    @patch('threat_feed_aggregator.app.process_github_feeds')
+    @patch('threat_feed_aggregator.routes.api.process_github_feeds')
     def test_github_endpoint(self, mock_process):
         mock_process.return_value = (True, "GitHub Updated")
         response = self.client.post('/api/update_github')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json['message'], 'GitHub Updated')
 
-    @patch('threat_feed_aggregator.app.process_azure_feeds')
+    @patch('threat_feed_aggregator.routes.api.process_azure_feeds')
     def test_azure_endpoint(self, mock_process):
         mock_process.return_value = (True, "Azure Updated")
         response = self.client.post('/api/update_azure')

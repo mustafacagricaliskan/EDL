@@ -2,7 +2,6 @@ import unittest
 from unittest.mock import patch, MagicMock
 import os
 import sys
-import json
 
 # Add path to import app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
@@ -27,7 +26,7 @@ class TestGuiViews(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Login', response.data)
 
-    @patch('threat_feed_aggregator.app.check_credentials')
+    @patch('threat_feed_aggregator.routes.auth.check_credentials')
     def test_login_action_success(self, mock_check):
         """Test successful login redirection."""
         mock_check.return_value = (True, "Login successful")
@@ -36,7 +35,7 @@ class TestGuiViews(unittest.TestCase):
         self.assertIn(b'Dashboard', response.data)
         self.assertIn(b'Logout', response.data)
 
-    @patch('threat_feed_aggregator.app.check_credentials')
+    @patch('threat_feed_aggregator.routes.auth.check_credentials')
     def test_login_action_failure(self, mock_check):
         """Test failed login stays on login page with error."""
         mock_check.return_value = (False, "Invalid credentials")
@@ -44,11 +43,11 @@ class TestGuiViews(unittest.TestCase):
         self.assertIn(b'Invalid credentials', response.data)
         self.assertIn(b'Login', response.data) # Still on login page
 
-    @patch('threat_feed_aggregator.app.get_all_indicators')
-    @patch('threat_feed_aggregator.app.get_indicator_counts_by_type')
-    @patch('threat_feed_aggregator.app.read_stats')
-    @patch('threat_feed_aggregator.app.read_config')
-    def test_dashboard_load(self, mock_config, mock_stats, mock_counts, mock_indicators):
+    @patch('threat_feed_aggregator.routes.dashboard.get_unique_indicator_count')
+    @patch('threat_feed_aggregator.routes.dashboard.get_indicator_counts_by_type')
+    @patch('threat_feed_aggregator.routes.dashboard.read_stats')
+    @patch('threat_feed_aggregator.routes.dashboard.read_config')
+    def test_dashboard_load(self, mock_config, mock_stats, mock_counts, mock_total):
         """Test that dashboard loads with stats."""
         self.login()
         
@@ -56,7 +55,7 @@ class TestGuiViews(unittest.TestCase):
         mock_config.return_value = {'source_urls': [{'name': 'TestFeed', 'url': 'http://test.com'}]}
         mock_stats.return_value = {'TestFeed': {'count': 100}}
         mock_counts.return_value = {'ip': 50, 'domain': 10}
-        mock_indicators.return_value = {} # Needed for total count calculation if not mocked separately
+        mock_total.return_value = 60
 
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
@@ -64,10 +63,10 @@ class TestGuiViews(unittest.TestCase):
         # Check if key elements are rendered
         self.assertIn(b'Dashboard', response.data)
         self.assertIn(b'TestFeed', response.data) # Source name
-        self.assertIn(b'TOTAL INDICATORS', response.data)
+        self.assertIn(b'Total Indicators', response.data)
 
-    @patch('threat_feed_aggregator.app.write_config')
-    @patch('threat_feed_aggregator.app.read_config')
+    @patch('threat_feed_aggregator.routes.system.write_config')
+    @patch('threat_feed_aggregator.routes.system.read_config')
     @patch('threat_feed_aggregator.app.update_scheduled_jobs')
     def test_add_source(self, mock_update_jobs, mock_read, mock_write):
         """Test adding a new threat feed source."""
@@ -84,7 +83,7 @@ class TestGuiViews(unittest.TestCase):
             'schedule_interval_minutes': 60
         }
         
-        response = self.client.post('/add', data=data, follow_redirects=True)
+        response = self.client.post('/system/add_source', data=data, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         
         # Verify write_config was called with new data
@@ -94,15 +93,15 @@ class TestGuiViews(unittest.TestCase):
         self.assertEqual(args['source_urls'][0]['name'], 'NewSource')
         self.assertEqual(args['source_urls'][0]['confidence'], 85)
 
-    @patch('threat_feed_aggregator.app.write_config')
-    @patch('threat_feed_aggregator.app.read_config')
+    @patch('threat_feed_aggregator.routes.system.write_config')
+    @patch('threat_feed_aggregator.routes.system.read_config')
     def test_update_settings(self, mock_read, mock_write):
         """Test updating global settings (retention)."""
         self.login()
         
         mock_read.return_value = {"indicator_lifetime_days": 30}
         
-        response = self.client.post('/update_settings', data={'indicator_lifetime_days': 60}, follow_redirects=True)
+        response = self.client.post('/system/update_settings', data={'indicator_lifetime_days': 60}, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         
         # Verify update

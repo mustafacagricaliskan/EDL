@@ -6,6 +6,12 @@
     },
      "deepwiki": {
       "serverUrl": "https://mcp.deepwiki.com/sse"
-    }
+    },
+     "github": {
+            "httpUrl": "https://api.githubcopilot.com/mcp/",
+            "headers": {
+                "Authorization": "Bearer $GITHUB_MCP_PAT"
+            }
+          }
   }
 }

@@ -108,6 +108,18 @@
                     </div>
                 </div>
             </div>
+
+            <!-- WHOIS Information Card -->
+            <div class="row">
+                <div class="col-md-12 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-light fw-bold">WHOIS Information</div>
+                        <div class="card-body">
+                            <pre id="whoisData" class="bg-light p-3 rounded" style="white-space: pre-wrap; word-break: break-all; max-height: 500px; overflow-y: auto;">No WHOIS data available.</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Error/Empty State -->
@@ -143,7 +155,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    displayResults(ip, data.data);
+                    displayResults(ip, data.data, data.whois_data); // Pass whois_data
                 } else {
                     Swal.fire('Error', data.error || 'Lookup failed', 'error');
                 }
@@ -158,7 +170,7 @@
             });
         }
 
-        function displayResults(ip, data) {
+        function displayResults(ip, data, whois_data) { // Added whois_data parameter
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('resultsArea').style.display = 'block';
 
@@ -168,6 +180,9 @@
             document.getElementById('resOrg').textContent = data.asn ? data.asn.organisation : 'N/A';
             document.getElementById('resLoc').textContent = data.city || 'Unknown';
             document.getElementById('resCountry').textContent = data.country || 'Unknown';
+
+            // 2. WHOIS Data
+            document.getElementById('whoisData').textContent = whois_data || 'No WHOIS data available.';
             
             if (data.gps) {
                 document.getElementById('googleMapsLink').href = `https://maps.google.com/?q=${data.gps}`;

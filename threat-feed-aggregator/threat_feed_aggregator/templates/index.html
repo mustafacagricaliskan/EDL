@@ -142,10 +142,59 @@
                             <a href="{{ url_for('dashboard.download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-dark text-start p-2 small d-flex justify-content-between"><span>Fortinet FortiGate</span><i class="fas fa-download"></i></a>
                         </div>
                         <h6 class="form-label-custom small fw-bold mb-2">Service Whitelists</h6>
-                        <div class="d-grid gap-2">
-                            <button onclick="updateMS365()" class="btn btn-light btn-sm text-start border"><i class="fab fa-microsoft me-2 text-info"></i>Update MS365</button>
-                            <button onclick="updateGitHub()" class="btn btn-light btn-sm text-start border"><i class="fab fa-github me-2 text-dark"></i>Update GitHub</button>
-                            <button onclick="updateAzure()" class="btn btn-light btn-sm text-start border"><i class="fas fa-cloud me-2 text-primary"></i>Update Azure</button>
+                        <div class="d-flex flex-column gap-2">
+                            <!-- MS365 -->
+                            <div class="btn-group w-100">
+                                <button onclick="updateMS365()" class="btn btn-light btn-sm text-start border flex-grow-1"><i class="fab fa-microsoft me-2 text-info"></i>Update MS365</button>
+                                <button type="button" class="btn btn-light btn-sm border dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Toggle Dropdown</span></button>
+                                <ul class="dropdown-menu shadow border-0">
+                                    <li><h6 class="dropdown-header small text-uppercase">Common</h6></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='ms365_common_ips.txt') }}"><i class="fas fa-download me-2 text-secondary"></i>IPs</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='ms365_common_urls.txt') }}"><i class="fas fa-download me-2 text-secondary"></i>URLs</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header small text-uppercase">Exchange</h6></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='ms365_exchange_ips.txt') }}"><i class="fas fa-download me-2 text-secondary"></i>IPs</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='ms365_exchange_urls.txt') }}"><i class="fas fa-download me-2 text-secondary"></i>URLs</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header small text-uppercase">SharePoint</h6></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='ms365_sharepoint_ips.txt') }}"><i class="fas fa-download me-2 text-secondary"></i>IPs</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='ms365_sharepoint_urls.txt') }}"><i class="fas fa-download me-2 text-secondary"></i>URLs</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header small text-uppercase">Skype/Teams</h6></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='ms365_skype_ips.txt') }}"><i class="fas fa-download me-2 text-secondary"></i>IPs</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='ms365_skype_urls.txt') }}"><i class="fas fa-download me-2 text-secondary"></i>URLs</a></li>
+                                </ul>
+                            </div>
+
+                            <!-- GitHub -->
+                            <div class="btn-group w-100">
+                                <button onclick="updateGitHub()" class="btn btn-light btn-sm text-start border flex-grow-1"><i class="fab fa-github me-2 text-dark"></i>Update GitHub</button>
+                                <button type="button" class="btn btn-light btn-sm border dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Toggle Dropdown</span></button>
+                                <ul class="dropdown-menu shadow border-0">
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='github_git_ips.txt') }}">Git Operations</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='github_web_ips.txt') }}">Web Access</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='github_actions_ips.txt') }}">Actions Runners</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='github_hooks_ips.txt') }}">Webhooks</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='github_pages_ips.txt') }}">Pages</a></li>
+                                </ul>
+                            </div>
+
+                            <!-- Azure -->
+                            <div class="btn-group w-100">
+                                <button onclick="updateAzure()" class="btn btn-light btn-sm text-start border flex-grow-1"><i class="fas fa-cloud me-2 text-primary"></i>Update Azure</button>
+                                <button type="button" class="btn btn-light btn-sm border dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Toggle Dropdown</span></button>
+                                <ul class="dropdown-menu shadow border-0">
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='azure_all_ips.txt') }}">All Public IPs</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header small text-uppercase">Services</h6></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='azure_sql_ips.txt') }}">Azure SQL</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='azure_storage_ips.txt') }}">Azure Storage</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><h6 class="dropdown-header small text-uppercase">Regions</h6></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='azure_westeurope_ips.txt') }}">West Europe</a></li>
+                                    <li><a class="dropdown-item small" href="{{ url_for('dashboard.download_file', filename='azure_northeurope_ips.txt') }}">North Europe</a></li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>

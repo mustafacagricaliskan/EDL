@@ -11,6 +11,9 @@ from .db_manager import init_db, set_admin_password, get_admin_password_hash
 from .cert_manager import generate_self_signed_cert, get_cert_paths, get_ca_bundle_path
 from .log_manager import setup_memory_logging
 from .aggregator import fetch_and_process_single_feed, run_aggregator
+from .microsoft_services import process_microsoft_feeds
+from .github_services import process_github_feeds
+from .azure_services import process_azure_feeds
 from .version import __version__
 
 # Initialize Memory Logging
@@ -100,6 +103,12 @@ def update_scheduled_jobs():
                 replace_existing=True
             )
             print(f"Scheduled job for {source_name} to run every {interval_minutes} minutes.")
+
+    # Scheduled Service Updates (Every 24 hours)
+    scheduler.add_job(process_microsoft_feeds, 'interval', minutes=1440, id='update_ms365', name='Microsoft 365 Feeds', replace_existing=True)
+    scheduler.add_job(process_github_feeds, 'interval', minutes=1440, id='update_github', name='GitHub Feeds', replace_existing=True)
+    scheduler.add_job(process_azure_feeds, 'interval', minutes=1440, id='update_azure', name='Azure Feeds', replace_existing=True)
+    print("Scheduled daily updates for Microsoft 365, GitHub, and Azure feeds.")
 
 # Ensure SSL
 generate_self_signed_cert()

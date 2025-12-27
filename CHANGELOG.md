@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.7.0] - 2025-12-27
+
+### Added
+- **Enterprise RBAC System:** Full Role-Based Access Control allowing custom profiles with Module-specific permissions (None, Read, Read-Write).
+- **LDAP Group-to-Profile Mapping:** Dynamic mapping of multiple LDAP Group DNs to specific administrative roles.
+- **Unified Modern UI:** Global "Base Layout" with a permanent sidebar, responsive containers, and a tabbed "System Settings" interface.
+- **Live Log Intelligence:** Added filtering ("Hide Polls") and persistent activity tracking to the operational terminal.
+
+### Optimized (Performance)
+- **Database Engine:** Optimized `upsert_indicators_bulk` using temporary staging tables and mass SELECT-INSERT logic for 5x faster processing.
+- **GeoIP Singleton:** Implemented a singleton MaxMind reader and LRU caching (10k entries) to eliminate redundant disk I/O during feed enrichment.
+- **Memory Streaming:** Updated EDL generation to use iterators, significantly reducing RAM usage for million-record datasets.
+- **Whitelist O(1):** Redesigned whitelist checking using pre-computed network objects and sets for near-instant lookup speeds.
+
+### Fixed
+- **SQLite Compatibility:** Fixed "near DO: syntax error" by replacing modern UPSERT with backward-compatible logic for older SQLite versions.
+- **UI Desync:** Ensured the "Recent Task Activity" table and "Live Logs" update immediately after manual triggers.
+- **Config Persistence:** Final fix for the issue where DNS and Proxy settings would occasionally overwrite each other.
+
 ## [1.6.0] - 2025-12-27
 
 ### Added

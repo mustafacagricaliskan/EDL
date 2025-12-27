@@ -108,8 +108,8 @@
           {% if messages %}
             {% for category, message in messages %}
               Swal.fire({
-                title: '{{ category|title }}',
-                text: '{{ message }}',
+                title: {{ category|title|tojson }},
+                text: {{ message|tojson }},
                 icon: '{{ category if category != "danger" else "error" }}',
                 timer: 3000,
                 showConfirmButton: false,

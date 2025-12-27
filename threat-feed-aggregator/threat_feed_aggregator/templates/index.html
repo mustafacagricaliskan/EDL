@@ -220,9 +220,40 @@
     <script src="{{ url_for('static', filename='vendor/js/sweetalert2.all.min.js') }}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            updateLogs(); updateHistory(); initMap();
-            setInterval(updateLogs, 3000); setInterval(updateHistory, 10000);
+            updateLogs(); updateHistory(); updateSourceStats(); initMap();
+            setInterval(updateLogs, 3000); 
+            setInterval(updateHistory, 10000);
+            setInterval(updateSourceStats, 10000);
         });
+
+        function updateSourceStats() {
+            fetch('/api/source_stats')
+                .then(r => r.json())
+                .then(data => {
+                    // Update the Active Sources table rows dynamically
+                    for (const sourceName in data) {
+                        const stat = data[sourceName];
+                        if (typeof stat !== 'object') continue;
+
+                        // Find the row by source name (searching in strong tags)
+                        const rows = document.querySelectorAll('tr');
+                        rows.forEach(row => {
+                            const nameEl = row.querySelector('strong');
+                            if (nameEl && nameEl.textContent === sourceName) {
+                                // Update indicator count badge
+                                const badge = row.querySelector('.badge');
+                                if (badge) badge.textContent = stat.count || 0;
+
+                                // Update last updated column (the 3rd column)
+                                const cells = row.querySelectorAll('td');
+                                if (cells.length >= 3) {
+                                    cells[2].textContent = stat.last_updated || 'N/A';
+                                }
+                            }
+                        });
+                    }
+                });
+        }
 
         function runAggregator() {
             Swal.fire({
@@ -230,7 +261,9 @@
                 icon: 'info', timer: 2000, timerProgressBar: true, showConfirmButton: false,
                 didOpen: () => { Swal.showLoading(); }
             });
-            fetch('/run').then(() => setTimeout(updateHistory, 1000));
+            fetch('/run').then(() => {
+                setTimeout(() => { updateHistory(); updateSourceStats(); }, 1000);
+            });
         }
 
         function updateHistory() {
@@ -309,7 +342,32 @@
 
         function initMap() {
             const data = {}; {% for c in country_stats %} data["{{ c.country_code }}"] = {{ c.count }}; {% endfor %}
-            try { if (typeof jsVectorMap !== 'undefined') { new jsVectorMap({ selector: '#world-map', map: 'world', visualizeData: { scale: ['#e2e8f0', '#4f46e5'], values: data }, onRegionTooltipShow(event, tooltip, code) { tooltip.text(`<div class="p-2"><h6 class="mb-1">${tooltip.text()}</h6><span class="badge bg-primary">${data[code] || 0} Indicators</span></div>`, { isHtml: true }); } }); } } catch(e) { console.error(e); }
+            try { 
+                if (typeof jsVectorMap !== 'undefined') { 
+                    const map = new jsVectorMap({ 
+                        selector: '#world-map', 
+                        map: 'world', 
+                        zoomOnScroll: false, // Disable default scroll-zoom
+                        zoomButtons: true,
+                        visualizeData: { scale: ['#e2e8f0', '#4f46e5'], values: data }, 
+                        onRegionTooltipShow(event, tooltip, code) { 
+                            tooltip.text(`<div class="p-2"><h6 class="mb-1">${tooltip.text()}</h6><span class="badge bg-primary">${data[code] || 0} Indicators</span></div>`, { isHtml: true }); 
+                        } 
+                    });
+
+                    // Add Ctrl + Scroll listener to enable zooming
+                    const mapEl = document.getElementById('world-map');
+                    mapEl.addEventListener('wheel', function(e) {
+                        if (e.ctrlKey) {
+                            e.preventDefault();
+                            if (e.deltaY < 0) map.setScale(map.scale * 1.2, e.offsetX, e.offsetY);
+                            else map.setScale(map.scale / 1.2, e.offsetX, e.offsetY);
+                        } else {
+                            // Show a hint or just let normal scroll happen
+                        }
+                    }, { passive: false });
+                } 
+            } catch(e) { console.error(e); }
         }
 
         function submitForm(action, data) {

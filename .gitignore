@@ -22,6 +22,8 @@ Python.h
 *.log
 *.sqlite
 *.db
+*.db-shm
+*.db-wal
 db.json
 stats.json
 

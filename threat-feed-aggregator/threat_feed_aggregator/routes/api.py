@@ -139,6 +139,32 @@ def live_logs():
     """Returns the latest logs from memory."""
     return jsonify(get_live_logs())
 
+@bp_api.route('/source_stats')
+@login_required
+def source_stats_api():
+    """Returns current counts and last updated times for all sources."""
+    from ..config_manager import read_stats
+    from tzlocal import get_localzone
+    
+    stats = read_stats()
+    local_tz = get_localzone()
+    
+    formatted_stats = {}
+    for name, data in stats.items():
+        if isinstance(data, dict) and 'last_updated' in data:
+            try:
+                dt = datetime.fromisoformat(data['last_updated'])
+                formatted_stats[name] = {
+                    "count": data.get('count', 0),
+                    "last_updated": dt.astimezone(local_tz).strftime('%d/%m/%Y %H:%M')
+                }
+            except:
+                formatted_stats[name] = data
+        else:
+            formatted_stats[name] = data
+            
+    return jsonify(formatted_stats)
+
 @bp_api.route('/regenerate_lists', methods=['POST'])
 @login_required
 def api_regenerate_lists():

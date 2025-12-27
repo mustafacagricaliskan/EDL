@@ -219,6 +219,23 @@
     <script src="{{ url_for('static', filename='vendor/js/world.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/js/sweetalert2.all.min.js') }}"></script>
     <script>
+        // Common Flash Messages
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              Swal.fire({
+                title: '{{ category|title }}',
+                text: '{{ message }}',
+                icon: '{{ category if category != "danger" else "error" }}',
+                timer: 3000,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+              });
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
         document.addEventListener('DOMContentLoaded', function() {
             updateLogs(); updateHistory(); updateSourceStats(); initMap();
             setInterval(updateLogs, 3000); 

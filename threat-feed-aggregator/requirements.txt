@@ -9,7 +9,7 @@ ldap3==2.9.1
 geoip2==4.7.0
 python-whois==0.9.6
 tzlocal==5.2
-gunicorn==21.2.0
+gunicorn==23.0.0
 cryptography==41.0.7
 dnspython==2.6.1
 aiodns==3.1.1

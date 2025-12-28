@@ -8,31 +8,12 @@ logger = logging.getLogger(__name__)
 
 async def get_async_session():
     """
-    Creates an aiohttp ClientSession with custom DNS resolver if configured.
+    Creates an aiohttp ClientSession with a robust threaded DNS resolver.
+    Custom DNS nameservers should be configured at the OS/Docker level.
     """
-    config = read_config()
-    dns_config = config.get('dns', {})
-    primary = dns_config.get('primary')
-    secondary = dns_config.get('secondary')
-    
-    nameservers = []
-    if primary: nameservers.append(primary)
-    if secondary: nameservers.append(secondary)
-    
-    connector = None
-    if nameservers:
-        try:
-            # aiohttp uses a custom resolver if provided
-            # AsyncResolver REQUIRES aiodns library
-            resolver = aiohttp.AsyncResolver(nameservers=nameservers)
-            connector = aiohttp.TCPConnector(resolver=resolver)
-            logger.info(f"Using custom DNS nameservers: {nameservers}")
-        except Exception as e:
-            logger.warning(f"Failed to initialize AsyncResolver (aiodns missing?): {e}. Falling back to standard resolver.")
-            connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-    else:
-        # Standard threaded resolver (no aiodns required)
-        connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+    # Use ThreadedResolver for maximum compatibility and stability
+    resolver = aiohttp.ThreadedResolver()
+    connector = aiohttp.TCPConnector(resolver=resolver)
     
     return aiohttp.ClientSession(connector=connector)
 

@@ -8,6 +8,9 @@ services:
     image: threat-feed-aggregator:latest
     container_name: threat-feed-aggregator
     user: "0:0"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "443:8080"
     volumes:

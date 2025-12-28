@@ -143,11 +143,16 @@ def live_logs():
 @login_required
 def source_stats_api():
     """Returns current counts and last updated times for all sources."""
-    from ..config_manager import read_stats
+    from ..config_manager import read_stats, read_config
+    from ..db_manager import get_unique_indicator_count, get_indicator_counts_by_type
     from tzlocal import get_localzone
     
     stats = read_stats()
+    config = read_config()
     local_tz = get_localzone()
+    
+    total_count = get_unique_indicator_count()
+    counts_by_type = get_indicator_counts_by_type()
     
     formatted_stats = {}
     for name, data in stats.items():
@@ -167,7 +172,15 @@ def source_stats_api():
         else:
             formatted_stats[name] = data
             
-    return jsonify(formatted_stats)
+    return jsonify({
+        "sources": formatted_stats,
+        "totals": {
+            "total": total_count,
+            "ip": counts_by_type.get('ip', 0) + counts_by_type.get('cidr', 0),
+            "domain": counts_by_type.get('domain', 0) + counts_by_type.get('url', 0),
+            "feeds": len(config.get('source_urls', []))
+        }
+    })
 
 @bp_api.route('/regenerate_lists', methods=['POST'])
 @login_required

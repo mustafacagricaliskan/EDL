@@ -77,22 +77,22 @@
         <div class="row g-4 mb-4">
             <div class="col-md-3">
                 <div class="card stat-card bg-primary text-white p-3 h-100 shadow-sm" style="background: var(--primary-gradient);">
-                    <div class="d-flex align-items-center"><div class="stat-icon"><i class="fas fa-list-ul"></i></div><div class="ms-3"><small class="opacity-75 text-uppercase fw-bold small">Total Indicators</small><h2 class="mb-0 fw-bold">{{ total_indicator_count }}</h2></div></div>
+                    <div class="d-flex align-items-center"><div class="stat-icon"><i class="fas fa-list-ul"></i></div><div class="ms-3"><small class="opacity-75 text-uppercase fw-bold small">Total Indicators</small><h2 class="mb-0 fw-bold" id="stat-total">{{ total_indicator_count }}</h2></div></div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card stat-card bg-white p-3 h-100 shadow-sm border-0">
-                    <div class="d-flex align-items-center"><div class="stat-icon bg-soft-info text-info"><i class="fas fa-network-wired"></i></div><div class="ms-3"><small class="text-muted text-uppercase fw-bold small">IP Addresses</small><h2 class="mb-0 fw-bold text-dark">{{ indicator_counts_by_type.get('ip', 0) + indicator_counts_by_type.get('cidr', 0) }}</h2></div></div>
+                    <div class="d-flex align-items-center"><div class="stat-icon bg-soft-info text-info"><i class="fas fa-network-wired"></i></div><div class="ms-3"><small class="text-muted text-uppercase fw-bold small">IP Addresses</small><h2 class="mb-0 fw-bold text-dark" id="stat-ip">{{ indicator_counts_by_type.get('ip', 0) + indicator_counts_by_type.get('cidr', 0) }}</h2></div></div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card stat-card bg-white p-3 h-100 shadow-sm border-0">
-                    <div class="d-flex align-items-center"><div class="stat-icon bg-soft-warning text-warning"><i class="fas fa-globe"></i></div><div class="ms-3"><small class="text-muted text-uppercase fw-bold small">Domains & URLs</small><h2 class="mb-0 fw-bold text-dark">{{ indicator_counts_by_type.get('domain', 0) + indicator_counts_by_type.get('url', 0) }}</h2></div></div>
+                    <div class="d-flex align-items-center"><div class="stat-icon bg-soft-warning text-warning"><i class="fas fa-globe"></i></div><div class="ms-3"><small class="text-muted text-uppercase fw-bold small">Domains & URLs</small><h2 class="mb-0 fw-bold text-dark" id="stat-domain">{{ indicator_counts_by_type.get('domain', 0) + indicator_counts_by_type.get('url', 0) }}</h2></div></div>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card stat-card bg-white p-3 h-100 shadow-sm border-0">
-                    <div class="d-flex align-items-center"><div class="stat-icon bg-soft-success text-success"><i class="fas fa-rss"></i></div><div class="ms-3"><small class="text-muted text-uppercase fw-bold small">Active Feeds</small><h2 class="mb-0 fw-bold text-dark">{{ urls|length }}</h2></div></div>
+                    <div class="d-flex align-items-center"><div class="stat-icon bg-soft-success text-success"><i class="fas fa-rss"></i></div><div class="ms-3"><small class="text-muted text-uppercase fw-bold small">Active Feeds</small><h2 class="mb-0 fw-bold text-dark" id="stat-feeds">{{ urls|length }}</h2></div></div>
                 </div>
             </div>
         </div>

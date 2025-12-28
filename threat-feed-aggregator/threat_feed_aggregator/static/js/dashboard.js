@@ -33,8 +33,18 @@ function updateSourceStats() {
     fetch('/api/source_stats')
         .then(r => r.json())
         .then(data => {
-            for (const sourceName in data) {
-                const stat = data[sourceName];
+            const sources = data.sources || {};
+            const totals = data.totals || {};
+
+            // 1. Update Top Cards
+            if (totals.total !== undefined) document.getElementById('stat-total').textContent = totals.total;
+            if (totals.ip !== undefined) document.getElementById('stat-ip').textContent = totals.ip;
+            if (totals.domain !== undefined) document.getElementById('stat-domain').textContent = totals.domain;
+            if (totals.feeds !== undefined) document.getElementById('stat-feeds').textContent = totals.feeds;
+
+            // 2. Update Source Table
+            for (const sourceName in sources) {
+                const stat = sources[sourceName];
                 if (typeof stat !== 'object') continue;
 
                 const rows = document.querySelectorAll('tr');
@@ -56,24 +66,33 @@ function updateSourceStats() {
 
 function runAggregator() {
     Swal.fire({
-        title: 'Triggering Aggregator', text: 'Wait for the process to start...',
+        title: 'Triggering Aggregator', text: 'Process started in background...',
         icon: 'info', timer: 2000, timerProgressBar: true, showConfirmButton: false,
         didOpen: () => { Swal.showLoading(); }
     });
     fetch('/run').then(() => {
-        setTimeout(() => { updateHistory(); updateSourceStats(); }, 1000);
+        // Poll more frequently for a short while
+        let count = 0;
+        const interval = setInterval(() => {
+            updateHistory(); 
+            updateSourceStats();
+            if (++count > 10) clearInterval(interval);
+        }, 2000);
     });
 }
 
 function updateHistory() {
     fetch('/api/history').then(r => r.json()).then(data => {
         const tbody = document.getElementById('historyTableBody');
+        if (!tbody) return;
         if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3">No records.</td></tr>'; return; }
-        tbody.innerHTML = '';
+        
+        let newHtml = '';
         data.forEach(item => {
             const statusClass = item.status === 'success' ? 'bg-success' : (item.status === 'running' ? 'bg-info' : 'bg-danger');
-            tbody.innerHTML += `<tr><td class="ps-4 text-muted small">${item.start_time}</td><td class="fw-bold">${item.source_name}</td><td><span class="badge ${statusClass}">${item.status.toUpperCase()}</span></td><td>${item.items_processed || 0}</td><td class="text-end pe-4 small text-muted">${item.message || '-'}</td></tr>`;
+            newHtml += `<tr><td class="ps-4 text-muted small">${item.start_time}</td><td class="fw-bold">${item.source_name}</td><td><span class="badge ${statusClass}">${item.status.toUpperCase()}</span></td><td>${item.items_processed || 0}</td><td class="text-end pe-4 small text-muted">${item.message || '-'}</td></tr>`;
         });
+        tbody.innerHTML = newHtml;
     });
 }
 
@@ -81,6 +100,7 @@ function updateLogs() {
     const hidePolls = document.getElementById('hidePolls').checked;
     fetch('/api/live_logs').then(r => r.json()).then(data => {
         const logWindow = document.getElementById('logWindow');
+        if (!logWindow) return;
         const wasAtBottom = logWindow.scrollHeight - logWindow.clientHeight <= logWindow.scrollTop + 50;
         logWindow.textContent = '';
         data.forEach(line => {
@@ -93,7 +113,10 @@ function updateLogs() {
     });
 }
 
-function clearTerminal() { document.getElementById('logWindow').textContent = ''; }
+function clearTerminal() { 
+    const logWindow = document.getElementById('logWindow');
+    if (logWindow) logWindow.textContent = ''; 
+}
 
 function clearHistory() { 
     if(confirm('Clear history?')) {
@@ -109,7 +132,11 @@ function updateMS365() {
     fetch('/api/update_ms365', {
         method:'POST', 
         headers:{'X-CSRFToken': AppConfig.csrfToken}
-    }).then(r=>r.json()).then(d=>Swal.fire('Result', d.message, d.status)); 
+    }).then(r=>r.json()).then(d=> {
+        Swal.fire('Result', d.message, d.status);
+        updateHistory();
+        updateSourceStats();
+    }); 
 }
 
 function updateGitHub() { 
@@ -117,7 +144,11 @@ function updateGitHub() {
     fetch('/api/update_github', {
         method:'POST', 
         headers:{'X-CSRFToken': AppConfig.csrfToken}
-    }).then(r=>r.json()).then(d=>Swal.fire('Result', d.message, d.status)); 
+    }).then(r=>r.json()).then(d=> {
+        Swal.fire('Result', d.message, d.status);
+        updateHistory();
+        updateSourceStats();
+    }); 
 }
 
 function updateAzure() { 
@@ -125,12 +156,21 @@ function updateAzure() {
     fetch('/api/update_azure', {
         method:'POST', 
         headers:{'X-CSRFToken': AppConfig.csrfToken}
-    }).then(r=>r.json()).then(d=>Swal.fire('Result', d.message, d.status)); 
+    }).then(r=>r.json()).then(d=> {
+        Swal.fire('Result', d.message, d.status);
+        updateHistory();
+        updateSourceStats();
+    }); 
 }
 
 function runSingleSource(name) { 
     Swal.fire({title:`Triggering ${name}...`, icon:'info', timer:1500, showConfirmButton:false, didOpen:()=>{Swal.showLoading();}}); 
-    fetch('/run').then(() => setTimeout(updateHistory, 1000)); 
+    fetch('/run').then(() => {
+        setTimeout(() => {
+            updateHistory(); 
+            updateSourceStats();
+        }, 1500);
+    }); 
 }
 
 function showAddSourceModal() {
@@ -166,7 +206,11 @@ function testSource(name) {
         body: JSON.stringify(source) 
     })
     .then(r => r.json()).then(data => {
-        if (data.status === 'success') Swal.fire({ title: 'Test OK!', html: `<div class="text-start text-success fw-bold">${data.message}</div><hr><small>Sample:</small><ul class="small"><li>${data.sample.join('</li><li>')}</li></ul>`, icon: 'success' });
+        if (data.status === 'success') {
+            Swal.fire({ title: 'Test OK!', html: `<div class="text-start text-success fw-bold">${data.message}</div><hr><small>Sample:</small><ul class="small"><li>${data.sample.join('</li><li>')}</li></ul>`, icon: 'success' });
+            updateHistory();
+            updateSourceStats();
+        }
         else Swal.fire('Failed', data.message, 'error');
     });
 }
@@ -193,13 +237,15 @@ function initMap() {
             });
 
             const mapEl = document.getElementById('world-map');
-            mapEl.addEventListener('wheel', function(e) {
-                if (e.ctrlKey) {
-                    e.preventDefault();
-                    if (e.deltaY < 0) map.setScale(map.scale * 1.2, e.offsetX, e.offsetY);
-                    else map.setScale(map.scale / 1.2, e.offsetX, e.offsetY);
-                }
-            }, { passive: false });
+            if (mapEl) {
+                mapEl.addEventListener('wheel', function(e) {
+                    if (e.ctrlKey) {
+                        e.preventDefault();
+                        if (e.deltaY < 0) map.setScale(map.scale * 1.2, e.offsetX, e.offsetY);
+                        else map.setScale(map.scale / 1.2, e.offsetX, e.offsetY);
+                    }
+                }, { passive: false });
+            }
         } 
     } catch(e) { console.error(e); }
 }

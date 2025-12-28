@@ -17,7 +17,8 @@
 - **Robust Error Handling:** Added comprehensive error reporting and notifications for all AJAX operations.
 
 ### Fixed
-- **Security:** Upgraded Gunicorn to v23.0.0 to resolve a critical TE.CL request smuggling vulnerability (CVE-2024-1135) related to improper 'Transfer-Encoding' header validation.
+- **Security:** Upgraded Gunicorn to v23.0.0 to resolve a critical TE.CL request smuggling vulnerability (CVE-2024-1135).
+- **Security:** Upgraded Cryptography to v44.0.0 to address a vulnerability in the statically linked OpenSSL version (CVE-2024-9143).
 - **CSRF Protection:** Resolved issues with missing CSRF tokens in AJAX-submitted forms.
 - **Stats Corruption:** Fixed a bug in the stats manager that was corrupting non-dictionary configuration values.
 - **Healthcheck:** Updated Docker healthcheck to support HTTPS/SSL environments.

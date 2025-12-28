@@ -11,9 +11,11 @@ DUMMY_CONFIG_PATH = os.path.join(DUMMY_CONFIG_DIR, "config.json")
 
 class TestAuthManager(unittest.TestCase):
 
+    @patch('threat_feed_aggregator.auth_manager.local_user_exists')
     @patch('threat_feed_aggregator.auth_manager.verify_local_user')
     @patch('threat_feed_aggregator.auth_manager.get_user_permissions')
-    def test_local_admin_login_success(self, mock_perms, mock_verify):
+    def test_local_admin_login_success(self, mock_perms, mock_verify, mock_exists):
+        mock_exists.return_value = True
         mock_verify.return_value = True
         mock_perms.return_value = {}
         success, message, _ = check_credentials('admin', 'correct_password')
@@ -21,18 +23,23 @@ class TestAuthManager(unittest.TestCase):
         self.assertEqual(message, "Local login successful.")
         mock_verify.assert_called_once_with('admin', 'correct_password')
 
+    @patch('threat_feed_aggregator.auth_manager.local_user_exists')
     @patch('threat_feed_aggregator.auth_manager.verify_local_user')
-    def test_local_admin_login_failure(self, mock_verify):
+    def test_local_admin_login_failure(self, mock_verify, mock_exists):
+        mock_exists.return_value = True
         mock_verify.return_value = False
         # We need to ensure LDAP fallback fails too, so we can mock read_config to disable it
         with patch('threat_feed_aggregator.config_manager.read_config', return_value={'auth': {'ldap_enabled': False}}):
             success, message, _ = check_credentials('admin', 'wrong_password')
             self.assertFalse(success)
+            self.assertEqual(message, "Invalid credentials.")
 
     @patch('threat_feed_aggregator.config_manager.read_config')
-    @patch('threat_feed_aggregator.auth_manager.check_admin_credentials')
-    def test_local_admin_login_failure_ldap_disabled(self, mock_check_admin_credentials, mock_read_config):
-        mock_check_admin_credentials.return_value = False
+    @patch('threat_feed_aggregator.auth_manager.local_user_exists')
+    @patch('threat_feed_aggregator.auth_manager.verify_local_user')
+    def test_local_admin_login_failure_ldap_disabled(self, mock_verify, mock_exists, mock_read_config):
+        mock_exists.return_value = True
+        mock_verify.return_value = False
         mock_read_config.return_value = {'auth': {'ldap_enabled': False}}
         
         success, message, _ = check_credentials('admin', 'wrong_password')

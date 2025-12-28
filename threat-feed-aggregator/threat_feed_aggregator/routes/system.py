@@ -269,11 +269,17 @@ def remove_source(index):
 @login_required
 def update_settings():
     lifetime = request.form.get('indicator_lifetime_days')
+    timezone = request.form.get('timezone')
+    
+    config = read_config()
     if lifetime:
-        config = read_config()
         config['indicator_lifetime_days'] = int(lifetime)
-        write_config(config)
-    return redirect(url_for('dashboard.index'))
+    if timezone:
+        config['timezone'] = timezone
+        
+    write_config(config)
+    flash('Global settings updated successfully.', 'success')
+    return redirect(url_for('system.index'))
 
 @bp_system.route('/api_client/add', methods=['POST'])
 @login_required

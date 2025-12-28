@@ -1,11 +1,42 @@
 import ipaddress
 import os
 import logging
+import pytz
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAFE_LIST_FILE = os.path.join(BASE_DIR, "data", "safe_list.txt")
+
+def format_timestamp(ts_str, fmt='%d/%m/%Y %H:%M'):
+    """
+    Formats an ISO timestamp string using the configured system timezone.
+    """
+    if not ts_str or ts_str == 'N/A':
+        return 'N/A'
+        
+    try:
+        from .config_manager import read_config
+        config = read_config()
+        tz_name = config.get('timezone', 'UTC')
+        target_tz = pytz.timezone(tz_name)
+        
+        # Parse ISO string
+        if isinstance(ts_str, str):
+            dt = datetime.fromisoformat(ts_str)
+        else:
+            dt = ts_str # Already a datetime object
+            
+        # Convert to target TZ
+        if dt.tzinfo is None:
+            dt = pytz.utc.localize(dt)
+            
+        local_dt = dt.astimezone(target_tz)
+        return local_dt.strftime(fmt)
+    except Exception as e:
+        logger.warning(f"Error formatting timestamp {ts_str}: {e}")
+        return str(ts_str)
 
 def load_safe_list():
     """

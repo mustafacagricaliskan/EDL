@@ -1,6 +1,5 @@
 from flask import render_template, request, session, redirect, url_for
-from datetime import datetime
-from tzlocal import get_localzone
+from datetime import datetime, timezone
 import logging
 from ..config_manager import read_config, read_stats
 from ..db_manager import (
@@ -9,9 +8,9 @@ from ..db_manager import (
     get_country_stats,
     get_whitelist
 )
-from ..utils import SAFE_ITEMS
+from ..utils import SAFE_ITEMS, format_timestamp
 from . import bp_dashboard
-from .auth import login_required # Will verify this import later
+from .auth import login_required
 
 logger = logging.getLogger(__name__)
 
@@ -29,45 +28,31 @@ def index():
     # Sort safe list for display
     safe_list_sorted = sorted(list(SAFE_ITEMS))
     
-    local_tz = get_localzone()
-
     # Format timestamps
     formatted_stats = {}
     for key, value in stats.items():
-        if isinstance(value, dict) and 'last_updated' in value and value['last_updated'] != 'N/A':
-            try:
-                dt_obj = datetime.fromisoformat(value['last_updated'])
-                formatted_stats[key] = {**value, 'last_updated': dt_obj.astimezone(local_tz).strftime('%d/%m/%Y %H:%M')}
-            except (ValueError, TypeError):
-                formatted_stats[key] = value
-        elif key == 'last_updated' and value != 'N/A':
-            if isinstance(value, str):
-                try:
-                    dt_obj = datetime.fromisoformat(value)
-                    formatted_stats[key] = dt_obj.astimezone(local_tz).strftime('%d/%m/%Y %H:%M')
-                except (ValueError, TypeError):
-                    formatted_stats[key] = value
-            else:
-                formatted_stats[key] = value
+        if isinstance(value, dict) and 'last_updated' in value:
+            formatted_stats[key] = {**value, 'last_updated': format_timestamp(value['last_updated'])}
+        elif key == 'last_updated':
+            formatted_stats[key] = format_timestamp(value)
+        else:
+            formatted_stats[key] = value
 
-    # We need to access the scheduler to show jobs. 
-    # Since scheduler is in app.py (or we can move it), we might need a way to access it.
-    # For now, let's import `scheduler` from `..app` (Circular import risk!) 
-    # Better approach: Move scheduler to a shared module or pass it in context.
-    # Let's try importing from `..scheduler_manager` if we create one, or `..app` carefully.
+    # Scheduler access
+    from ..app import scheduler
+    import pytz
     
-    from ..app import scheduler # Be careful here
-    
+    target_tz = pytz.timezone(config.get('timezone', 'UTC'))
     scheduled_jobs = scheduler.get_jobs()
     jobs_for_template = []
     
     from apscheduler.triggers.interval import IntervalTrigger
 
     for job in scheduled_jobs:
-        next_run = job.next_run_time.astimezone(local_tz) if job.next_run_time else None
+        next_run = job.next_run_time.astimezone(target_tz) if job.next_run_time else None
         time_until = 'N/A'
         if next_run:
-            now = datetime.now(local_tz)
+            now = datetime.now(target_tz)
             diff = next_run - now
             total_seconds = int(diff.total_seconds())
             minutes = total_seconds // 60

@@ -93,10 +93,26 @@
             </div>
             <div class="col-md-6">
                 <div class="card settings-card shadow-sm mb-4">
-                    <div class="card-header bg-white fw-bold py-3 border-0"><i class="fas fa-history me-2 text-primary"></i> Data Retention</div>
+                    <div class="card-header bg-white fw-bold py-3 border-0"><i class="fas fa-cog me-2 text-primary"></i> Global Settings</div>
                     <div class="card-body pt-0">
                         <form action="{{ url_for('system.update_settings') }}" method="POST">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="mb-3">
+                                <label class="form-label-custom">System Timezone</label>
+                                <select class="form-select shadow-sm" name="timezone" {{ 'disabled' if sys_perm == 'r' }}>
+                                    {% set current_tz = config.get('timezone', 'UTC') %}
+                                    <option value="UTC" {{ 'selected' if current_tz == 'UTC' }}>UTC (Universal Time)</option>
+                                    <option value="Europe/Istanbul" {{ 'selected' if current_tz == 'Europe/Istanbul' }}>Europe/Istanbul</option>
+                                    <option value="Europe/London" {{ 'selected' if current_tz == 'Europe/London' }}>Europe/London</option>
+                                    <option value="Europe/Berlin" {{ 'selected' if current_tz == 'Europe/Berlin' }}>Europe/Berlin</option>
+                                    <option value="America/New_York" {{ 'selected' if current_tz == 'America/New_York' }}>America/New_York (EST)</option>
+                                    <option value="America/Los_Angeles" {{ 'selected' if current_tz == 'America/Los_Angeles' }}>America/Los_Angeles (PST)</option>
+                                    <option value="Asia/Tokyo" {{ 'selected' if current_tz == 'Asia/Tokyo' }}>Asia/Tokyo</option>
+                                    <option value="Asia/Dubai" {{ 'selected' if current_tz == 'Asia/Dubai' }}>Asia/Dubai</option>
+                                    <option value="Australia/Sydney" {{ 'selected' if current_tz == 'Australia/Sydney' }}>Australia/Sydney</option>
+                                </select>
+                                <div class="form-text mt-1 small">Used for displaying all timestamps in the UI.</div>
+                            </div>
                             <div class="mb-3">
                                 <label class="form-label-custom">Indicator Lifetime (Days)</label>
                                 <div class="input-group shadow-sm">

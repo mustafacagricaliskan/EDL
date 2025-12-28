@@ -21,10 +21,18 @@ async def get_async_session():
     
     connector = None
     if nameservers:
-        # aiohttp uses a custom resolver if provided
-        resolver = aiohttp.AsyncResolver(nameservers=nameservers)
-        connector = aiohttp.TCPConnector(resolver=resolver)
-        logger.debug(f"Using custom DNS nameservers: {nameservers}")
+        try:
+            # aiohttp uses a custom resolver if provided
+            # AsyncResolver REQUIRES aiodns library
+            resolver = aiohttp.AsyncResolver(nameservers=nameservers)
+            connector = aiohttp.TCPConnector(resolver=resolver)
+            logger.info(f"Using custom DNS nameservers: {nameservers}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize AsyncResolver (aiodns missing?): {e}. Falling back to standard resolver.")
+            connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+    else:
+        # Standard threaded resolver (no aiodns required)
+        connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
     
     return aiohttp.ClientSession(connector=connector)
 

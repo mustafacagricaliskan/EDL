@@ -17,6 +17,7 @@
 - **Robust Error Handling:** Added comprehensive error reporting and notifications for all AJAX operations.
 
 ### Fixed
+- **Security:** Upgraded Requests to v2.32.3 to fix a vulnerability where SSL verification could be bypassed in pooled connections (CVE-2024-35195).
 - **Security:** Upgraded Gunicorn to v23.0.0 to resolve a critical TE.CL request smuggling vulnerability (CVE-2024-1135).
 - **Security:** Upgraded Cryptography to v44.0.0 to address a vulnerability in the statically linked OpenSSL version (CVE-2024-9143).
 - **CSRF Protection:** Resolved issues with missing CSRF tokens in AJAX-submitted forms.

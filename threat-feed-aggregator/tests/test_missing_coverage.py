@@ -76,8 +76,11 @@ class TestMissingCoverage(unittest.TestCase):
         payload = {'ip': '8.8.8.8'}
         response = self.client.post('/tools/api/lookup_ip', json=payload)
         
-        self.assertEqual(response.status_code, 502)
-        self.assertFalse(response.json['success'])
+        # New logic returns 200 even if external API fails (graceful degradation)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json['success'])
+        # The 'data' field might be empty, but request succeeds
+        self.assertEqual(response.json['data'], {})
 
     def test_lookup_ip_no_input(self):
         """Test IP lookup with missing input."""

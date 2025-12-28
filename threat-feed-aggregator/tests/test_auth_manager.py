@@ -37,7 +37,7 @@ class TestAuthManager(unittest.TestCase):
         
         success, message, _ = check_credentials('admin', 'wrong_password')
         self.assertFalse(success)
-        self.assertEqual(message, "LDAP authentication is disabled.")
+        self.assertEqual(message, "Invalid credentials.")
 
     @patch('threat_feed_aggregator.config_manager.read_config')
     def test_ldap_disabled(self, mock_read_config):

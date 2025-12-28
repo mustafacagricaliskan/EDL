@@ -78,6 +78,51 @@ def status_detailed():
     """Returns detailed status of currently running jobs."""
     return jsonify(CURRENT_JOB_STATUS)
 
+@bp_api.route('/scheduled_jobs')
+@login_required
+def get_scheduled_jobs():
+    """Returns sorted list of upcoming scheduled jobs."""
+    from ..app import scheduler
+    import pytz
+    from ..config_manager import read_config
+    from apscheduler.triggers.interval import IntervalTrigger
+    
+    config = read_config()
+    target_tz = pytz.timezone(config.get('timezone', 'UTC'))
+    
+    jobs = scheduler.get_jobs()
+    formatted_jobs = []
+    
+    for job in jobs:
+        next_run = job.next_run_time.astimezone(target_tz) if job.next_run_time else None
+        time_until = 'N/A'
+        if next_run:
+            now = datetime.now(target_tz)
+            diff = next_run - now
+            total_seconds = int(diff.total_seconds())
+            if total_seconds < 0:
+                time_until = "Running..."
+            else:
+                minutes = total_seconds // 60
+                if minutes < 60:
+                    time_until = f"in {minutes} min"
+                else:
+                    hours = minutes // 60
+                    mins = minutes % 60
+                    time_until = f"in {hours}h {mins}m"
+
+        formatted_jobs.append({
+            'name': job.name,
+            'next_run_time': next_run.strftime('%d/%m/%Y %H:%M') if next_run else 'N/A',
+            'next_run_timestamp': next_run.timestamp() if next_run else 0,
+            'time_until': time_until
+        })
+    
+    # Sort by nearest run time
+    formatted_jobs.sort(key=lambda x: x['next_run_timestamp'] if x['next_run_timestamp'] > 0 else float('inf'))
+    
+    return jsonify(formatted_jobs)
+
 @bp_api.route('/trend_data')
 @login_required
 def trend_data():

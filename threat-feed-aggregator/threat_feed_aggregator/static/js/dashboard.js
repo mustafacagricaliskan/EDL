@@ -7,10 +7,12 @@ document.addEventListener('DOMContentLoaded', function() {
     updateLogs();
     updateHistory();
     updateSourceStats();
+    updateScheduledJobs();
     initMap();
     setInterval(updateLogs, 3000); 
     setInterval(updateHistory, 10000);
     setInterval(updateSourceStats, 10000);
+    setInterval(updateScheduledJobs, 30000); // Update schedules every 30s
 
     // Handle Flash Messages
     if (window.AppConfig && window.AppConfig.flashMessages) {
@@ -330,10 +332,52 @@ function submitForm(action, data) {
     document.body.appendChild(form); form.submit();
 }
 
+function updateScheduledJobs() {
+    fetch('/api/scheduled_jobs')
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('scheduledJobsTableBody');
+            if (!tbody) return;
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" class="text-center py-3 text-muted">No active schedules.</td></tr>';
+                return;
+            }
+
+            // Show top 4 nearest tasks on dashboard
+            let html = '';
+            data.slice(0, 4).forEach(job => {
+                html += `<tr><td class="ps-3 py-2"><strong>${job.name}</strong><br><span class="text-muted" style="font-size: 0.7em;">${job.next_run_time}</span></td><td class="text-end pe-3 text-primary fw-bold">${job.time_until}</td></tr>`;
+            });
+            tbody.innerHTML = html;
+        })
+        .catch(err => console.error('Failed to update schedules:', err));
+}
+
+function viewAllSchedules() {
+    fetch('/api/scheduled_jobs')
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('allSchedulesTableBody');
+            if (!tbody) return;
+            
+            let html = '';
+            data.forEach(job => {
+                html += `<tr><td class="ps-4 py-2"><strong>${job.name}</strong></td><td>${job.next_run_time}</td><td class="text-end pe-4 text-primary fw-bold">${job.time_until}</td></tr>`;
+            });
+            tbody.innerHTML = html;
+            
+            const modal = new bootstrap.Modal(document.getElementById('schedulesModal'));
+            modal.show();
+        });
+}
+
 window.updateSourceStats = updateSourceStats;
 window.runAggregator = runAggregator;
 window.updateHistory = updateHistory;
 window.viewAllHistory = viewAllHistory;
+window.updateScheduledJobs = updateScheduledJobs;
+window.viewAllSchedules = viewAllSchedules;
 window.updateLogs = updateLogs;
 window.clearTerminal = clearTerminal;
 window.clearHistory = clearHistory;

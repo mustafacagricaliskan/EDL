@@ -82,18 +82,30 @@ function runAggregator() {
 }
 
 function updateHistory() {
-    fetch('/api/history').then(r => r.json()).then(data => {
-        const tbody = document.getElementById('historyTableBody');
-        if (!tbody) return;
-        if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3">No records.</td></tr>'; return; }
-        
-        let newHtml = '';
-        data.forEach(item => {
-            const statusClass = item.status === 'success' ? 'bg-success' : (item.status === 'running' ? 'bg-info' : 'bg-danger');
-            newHtml += `<tr><td class="ps-4 text-muted small">${item.start_time}</td><td class="fw-bold">${item.source_name}</td><td><span class="badge ${statusClass}">${item.status.toUpperCase()}</span></td><td>${item.items_processed || 0}</td><td class="text-end pe-4 small text-muted">${item.message || '-'}</td></tr>`;
+    fetch('/api/history')
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+            return r.json();
+        })
+        .then(data => {
+            const tbody = document.getElementById('historyTableBody');
+            if (!tbody) return;
+            
+            if (!Array.isArray(data) || data.length === 0) { 
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3">No records.</td></tr>'; 
+                return; 
+            }
+            
+            let newHtml = '';
+            data.forEach(item => {
+                const statusClass = item.status === 'success' ? 'bg-success' : (item.status === 'running' ? 'bg-info' : 'bg-danger');
+                newHtml += `<tr><td class="ps-4 text-muted small">${item.start_time}</td><td class="fw-bold">${item.source_name}</td><td><span class="badge ${statusClass}">${item.status.toUpperCase()}</span></td><td>${item.items_processed || 0}</td><td class="text-end pe-4 small text-muted">${item.message || '-'}</td></tr>`;
+            });
+            tbody.innerHTML = newHtml;
+        })
+        .catch(err => {
+            console.error('Update history failed:', err);
         });
-        tbody.innerHTML = newHtml;
-    });
 }
 
 function updateLogs() {
@@ -123,7 +135,20 @@ function clearHistory() {
         fetch('/api/history/clear', { 
             method: 'POST', 
             headers: { 'X-CSRFToken': AppConfig.csrfToken } 
-        }).then(() => updateHistory()); 
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                Swal.fire('Cleared!', data.message, 'success');
+                updateHistory();
+            } else {
+                Swal.fire('Error', data.message || 'Failed to clear history', 'error');
+            }
+        })
+        .catch(err => {
+            console.error('Clear history error:', err);
+            Swal.fire('Error', 'Network error while clearing history', 'error');
+        });
     }
 }
 

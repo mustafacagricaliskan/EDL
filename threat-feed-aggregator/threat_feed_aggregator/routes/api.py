@@ -120,6 +120,23 @@ def job_history():
             pass
     return jsonify(history)
 
+@bp_api.route('/history/clear', methods=['POST'])
+@login_required
+def clear_history_route():
+    """Clears the job history."""
+    logger.info("RECEIVED request to clear job history")
+    if clear_job_history():
+        return jsonify({'status': 'success', 'message': 'Job history cleared.'})
+    else:
+        logger.error("Failed to clear job history in DB")
+        return jsonify({'status': 'error', 'message': 'Failed to clear job history.'}), 500
+
+@bp_api.route('/live_logs')
+@login_required
+def live_logs():
+    """Returns the latest logs from memory."""
+    return jsonify(get_live_logs())
+
 @bp_api.route('/source_stats')
 @login_required
 def source_stats_api():

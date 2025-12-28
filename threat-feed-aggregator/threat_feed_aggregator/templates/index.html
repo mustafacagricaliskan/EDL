@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/jsvectormap.min.css') }}">
     <!-- Theme CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <style>
         :root {
             --primary-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
@@ -215,8 +216,8 @@
 
         <!-- Task Activity & Schedules -->
         <div class="row g-4 mb-4">
-            <div class="col-md-8">
-                <div class="card settings-card shadow-sm border-0">
+            <div class="col-md-6">
+                <div class="card settings-card shadow-sm h-100 border-0">
                     <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
                         <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history me-2 text-secondary"></i>Recent Task Activity</h6>
                         <button class="btn btn-xs btn-outline-danger" onclick="clearHistory()">Clear History</button>
@@ -229,7 +230,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card settings-card shadow-sm h-100 border-0">
                     <div class="card-header bg-white py-3 border-0"><h6 class="fw-bold mb-0 text-dark"><i class="fas fa-calendar-alt me-2 text-info"></i>Scheduled Runs</h6></div>
                     <div class="card-body p-0">

@@ -17,8 +17,8 @@
 - **Robust Error Handling:** Added comprehensive error reporting and notifications for all AJAX operations.
 
 ### Fixed
+- **Security:** Upgraded Requests to v2.32.4 to fix a vulnerability where .netrc credentials could be leaked to third parties via maliciously-crafted URLs (CVE-2024-35195 / CVE-2023-32681 related).
 - **Security:** Upgraded pycares to v4.9.0 to fix a use-after-free vulnerability that could cause interpreter crashes during garbage collection (CVE-2024-51523).
-- **Security:** Upgraded Requests to v2.32.3 to fix a vulnerability where SSL verification could be bypassed in pooled connections (CVE-2024-35195).
 - **Security:** Upgraded Gunicorn to v23.0.0 to resolve a critical TE.CL request smuggling vulnerability (CVE-2024-1135).
 - **Security:** Upgraded Cryptography to v44.0.0 to address a vulnerability in the statically linked OpenSSL version (CVE-2024-9143).
 - **CSRF Protection:** Resolved issues with missing CSRF tokens in AJAX-submitted forms.

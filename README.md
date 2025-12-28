@@ -1,116 +1,116 @@
-# Threat Feed Aggregator
+# 🛡️ Threat Feed Aggregator
 
-[![Version](https://img.shields.io/badge/version-1.9.0-blue.svg)](CHANGELOG.md)
-...
-## 🚀 Key Features (v1.9.0)
+<p align="center">
+  <img src="https://img.shields.io/badge/Version-1.9.0-blue?style=for-the-badge" alt="Version 1.9.0">
+  <img src="https://img.shields.io/badge/Python-3.13+-green?style=for-the-badge&logo=python" alt="Python 3.13+">
+  <img src="https://img.shields.io/badge/Flask-3.0-lightgrey?style=for-the-badge&logo=flask" alt="Flask 3.0">
+  <img src="https://img.shields.io/badge/Docker-Ready-cyan?style=for-the-badge&logo=docker" alt="Docker Ready">
+</p>
 
-*   **Intelligent Processing:**
-    *   **CIDR Aggregation:** Merges contiguous IPs and subnets into optimal CIDR blocks.
-    *   **Multi-Source Scoring:** Assigns risk scores based on source confidence and overlap bonus.
-    *   **Automated Cleanup:** Per-source retention policies to age out old indicators.
-*   **Modern Dashboard:**
-    *   **Real-time Visibility:** AJAX-powered statistics, live operational logs, and task history.
-    *   **Enhanced UX:** Responsive "Soft UI" design with interactive world maps and instant feedback.
-    *   **Dynamic Scheduling:** Visual monitoring of upcoming tasks with relative "time until" indicators.
-*   **Enterprise Security:**
-    *   **Advanced RBAC:** Role-Based Access Control with custom profiles and module-level permissions.
-    *   **Multi-Client API:** Per-client API keys with Trusted Host (IP) restrictions.
-    *   **LDAP/AD Integration:** Seamless login with Active Directory group-to-profile mapping.
-*   **Global Readiness:**
-    *   **Service Whitelists:** Native support for Microsoft 365, GitHub, and Azure Service IPs.
-    *   **System-wide Proxy:** Centralized HTTP/HTTPS proxy support for all outbound traffic.
-    *   **Timezone Support:** Configurable system timezone for all UI timestamps.
-*   **Investigation Tools:**
-    *   **IP Intelligence:** Integrated WHOIS, Geolocation (IP-API), and Reverse DNS (THC) lookups.
+<p align="center">
+  <strong>The Ultimate Intelligence Engine for External Dynamic Lists (EDL)</strong><br>
+  Normalize, aggregate, and score multi-source threat intelligence for Palo Alto Networks, Fortinet, and beyond.
+</p>
 
 ---
 
-## 🛠 Architecture
+## 📖 Overview
 
-The project follows modern "Clean Code" principles:
-*   **Asynchronous Engine:** Core aggregator uses `asyncio` and `aiohttp` for high-performance concurrent fetching.
-*   **Repository Pattern:** Decoupled database logic for Users, Indicators, and Jobs.
-*   **Service Layer:** Business logic isolated from web routes for better testability.
-*   **Modular Blueprints:** Organized Flask routes for Dashboard, API, Auth, System, and Tools.
+**Threat Feed Aggregator** is an enterprise-grade platform designed to simplify the management of threat intelligence feeds. It fetches raw indicators (IPs, CIDRs, Domains, URLs) from disparate sources, standardizes them, calculates risk scores, and generates optimized lists for security infrastructure consumption.
 
 ---
 
-## 🚦 Getting Started
+## ✨ Key Features
 
-### 1. Local Development
+### 🧠 Intelligence Engine
+- **CIDR Aggregation:** Automatically merges contiguous IP addresses and overlapping subnets into optimal CIDR blocks.
+- **Smart Scoring:** Assigns risk scores (0-100) based on source confidence and indicator overlap.
+- **Auto-Retention:** Granular, per-source aging policies to keep your blocklists fresh and relevant.
 
-**Prerequisites:** Python 3.13+
+### 📊 Real-Time Dashboard
+- **Live Terminal:** High-performance operational logs with smart filtering (Hide heartbeats/static assets).
+- **Dynamic Stats:** AJAX-driven summary cards and activity history—no refresh required.
+- **Visual Distribution:** Interactive world map visualizing the geographical origin of threat indicators.
 
-```bash
-# Create and activate venv
-python -m venv venv
-.\venv\Scripts\Activate.ps1 # Windows
-source venv/bin/activate    # Linux/macOS
+### 🏢 Enterprise Readiness
+- **Advanced RBAC:** Role-Based Access Control with custom permission profiles (Read/Write/None).
+- **LDAP/AD Integration:** Native Active Directory support with Group-to-Profile mapping.
+- **Secure Infrastructure:** Support for System-wide Proxies, custom Root CAs, and high-security SSL configurations.
+- **Multi-Client API:** Unique API keys for SOAR/SIEM consumers with Trusted Host (IP) enforcement.
 
-# Install dependencies
-pip install -r threat-feed-aggregator/requirements.txt
+### 🔍 Investigation Tools
+- **Deep Lookup:** Integrated IP investigation with WHOIS, Geo-location (IP-API), and Reverse DNS (THC).
 
-# Configure Environment
-cp .env.example .env
-# Edit .env: Set SECRET_KEY and ADMIN_PASSWORD
+---
 
-# Initialize Config
-cp threat-feed-aggregator/data/config.json.example threat-feed-aggregator/threat_feed_aggregator/data/config.json
+## 🚀 Quick Start
 
-# Run Application
-python -m threat_feed_aggregator.app
-```
-Access at `https://127.0.0.1:443` (Default login: `admin` / `change_me_please`)
-
-### 2. Docker Deployment (Recommended)
-
-Requires **Docker Desktop** or **Docker Engine**.
+### 1. Docker Deployment (Recommended)
+The fastest way to get up and running is using Docker Compose.
 
 ```bash
-# Build and start
+# Clone the repository
+git clone https://github.com/gokaycagri/EDL.git
+cd EDL
+
+# Start the environment
 docker-compose up -d --build
 ```
+- **Dashboard:** `https://localhost`
+- **Default Credentials:** `admin` / `change_me_please`
 
-*   **URL:** `https://localhost`
-*   **Persistence:** Data is stored in `./threat-feed-aggregator/data` on the host.
-*   **Healthcheck:** Integrated container health monitoring.
+### 2. Local Python Setup
+```bash
+# Setup Environment
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+.\venv\Scripts\Activate.ps1 # Windows
+
+# Install Dependencies
+pip install -r threat-feed-aggregator/requirements.txt
+
+# Initial Configuration
+cp .env.example .env
+cp threat-feed-aggregator/data/config.json.example threat-feed-aggregator/threat_feed_aggregator/data/config.json
+
+# Run
+python -m threat_feed_aggregator.app
+```
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Configuration & Security
 
-Settings can be managed via the **System Settings** menu in the GUI:
+The platform is designed to be "Config-via-GUI" first. Navigate to **System Settings** to manage:
+- **General:** Timezone, global retention, and threat sources.
+- **Network:** Centralized Proxy and custom DNS servers.
+- **Auth:** LDAP server clusters and AD group mapping.
+- **Security:** SSL Certificate management and System Backups.
 
-*   **General:** Configure System Timezone and global Indicator Lifetime.
-*   **Authentication:** Enable LDAP, add server clusters, and map AD Groups to Admin Profiles.
-*   **Network:** Set up a system-wide Proxy and custom DNS servers.
-*   **Security:** Perform system backups (ZIP) or upload custom SSL certificates (.pfx).
+> [!IMPORTANT]  
+> **Security Fix (v1.9.0):** This version includes critical patches for Gunicorn (CVE-2024-1135) and Cryptography (CVE-2024-9143).
 
 ---
 
 ## 🧪 Testing
 
-The project includes a comprehensive suite of **51 unit and integration tests** covering >95% of core functionality.
+We maintain high code quality with a comprehensive test suite.
 
 ```bash
-# Run all tests
-.\venv\Scripts\pytest threat-feed-aggregator/tests/
+# Run all 60+ unit and integration tests
+pytest threat-feed-aggregator/tests/
 ```
 
-Test modules:
-*   `test_aggregation.py`: Data processing and CIDR logic.
-*   `test_auth_manager.py`: RBAC and LDAP authentication.
-*   `test_missing_coverage.py`: API, System, and Tool endpoints.
+Our CI pipeline automatically validates every commit on **GitHub Actions** using Python 3.13.
 
 ---
 
-## 🏗 Deployment (OpenShift / K8s)
+## 🏗 Architecture (Clean Code)
 
-The Docker image is built for non-root execution (UID 1001) and is fully compatible with OpenShift's arbitrary UID security policy (via GID 0 permissions).
-
-1.  Build and push to your registry.
-2.  Apply manifests in `openshift/deployment.yaml`.
-3.  Ensure a Persistent Volume Claim (PVC) is mounted at `/app/threat_feed_aggregator/data`.
+- **Asynchronous Core:** Uses `asyncio` and `aiohttp` for high-speed concurrent feed fetching.
+- **Repository Pattern:** Database logic is decoupled into domain-specific repositories.
+- **Service Layer:** Business logic is isolated from web routes for modularity and testability.
+- **Database:** SQLite with **WAL Mode** enabled for concurrent read/write performance.
 
 ---
 
@@ -120,9 +120,6 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-## ✉️ Contact
-
-For support, feature requests, or security reports, please use the project's issue tracker or contact the maintainer directly.
-
----
-*Built with ❤️ for Security Analysts.*
+<p align="center">
+  Built with ❤️ for Security Operations Teams.
+</p>

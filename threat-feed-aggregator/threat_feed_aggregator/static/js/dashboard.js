@@ -246,13 +246,27 @@ function updateAzure() {
 }
 
 function runSingleSource(name) { 
-    Swal.fire({title:`Triggering ${name}...`, icon:'info', timer:1500, showConfirmButton:false, didOpen:()=>{Swal.showLoading();}}); 
-    fetch('/run').then(() => {
-        setTimeout(() => {
-            updateHistory(); 
-            updateSourceStats();
-        }, 1500);
+    Swal.fire({
+        title: `Triggering ${name}...`, 
+        text: 'Fetching fresh data in background',
+        icon: 'info', 
+        timer: 1500, 
+        showConfirmButton: false, 
+        didOpen: () => { Swal.showLoading(); }
     }); 
+    
+    fetch(`/api/run_single/${encodeURIComponent(name)}`)
+        .then(r => r.json())
+        .then(data => {
+            // Poll for updates for the next 15 seconds
+            let count = 0;
+            const interval = setInterval(() => {
+                updateHistory(); 
+                updateSourceStats();
+                if (++count > 8) clearInterval(interval);
+            }, 2000);
+        })
+        .catch(err => Swal.fire('Error', 'Failed to trigger single fetch', 'error'));
 }
 
 function showAddSourceModal() {

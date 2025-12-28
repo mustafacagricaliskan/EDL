@@ -66,6 +66,22 @@ def run_script():
     logging.info("Aggregation task started in a new thread.")
     return jsonify({"status": "running"})
 
+@bp_api.route('/run_single/<path:name>')
+@login_required
+def run_single_feed(name):
+    """Triggers a single feed update in the background."""
+    config = read_config()
+    source = next((s for s in config.get('source_urls', []) if s['name'] == name), None)
+    
+    if not source:
+        return jsonify({"status": "error", "message": "Source not found"}), 404
+        
+    from ..aggregator import fetch_and_process_single_feed
+    thread = threading.Thread(target=fetch_and_process_single_feed, args=(source,))
+    thread.start()
+    
+    return jsonify({"status": "running", "message": f"Fetch started for {name}"})
+
 @bp_api.route('/status')
 @login_required
 def status():

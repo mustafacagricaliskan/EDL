@@ -1,15 +1,8 @@
 # Threat Feed Aggregator
 
-[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/)
-[![Flask](https://img.shields.io/badge/flask-3.0-green.svg)](https://flask.palletsprojects.com/)
-[![Docker](https://img.shields.io/badge/docker-ready-cyan.svg)](https://www.docker.com/)
-
-An enterprise-grade, web-based threat intelligence platform built with Flask. Collect, process, and manage threat feeds from various sources, normalize data, and generate optimized External Dynamic Lists (EDL) for security infrastructure like Palo Alto Networks and Fortinet.
-
----
-
-## 🚀 Key Features (v1.8.0)
+[![Version](https://img.shields.io/badge/version-1.9.0-blue.svg)](CHANGELOG.md)
+...
+## 🚀 Key Features (v1.9.0)
 
 *   **Intelligent Processing:**
     *   **CIDR Aggregation:** Merges contiguous IPs and subnets into optimal CIDR blocks.

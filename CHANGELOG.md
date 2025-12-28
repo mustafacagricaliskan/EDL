@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.9.0] - 2025-12-28
+
+### Added
+- **Repository Pattern:** Major backend refactoring separating database logic into domain-specific repositories (Users, Indicators, Whitelist, Jobs).
+- **Service Layer:** Introduced a service layer to isolate business logic from web routes for improved maintainability.
+- **Configurable Timezone:** Added a global system timezone setting in the GUI, ensuring all timestamps across the dashboard and logs reflect the local time.
+- **Enhanced IP Investigation:** Integrated `ip-api.com` for detailed geolocation, ISP, and ASN data in the investigation tool.
+- **Dynamic Dashboard Refresh:** Added high-frequency polling and AJAX-driven updates for summary cards and task results.
+- **Downloadable Service Whitelists:** Added dropdown menus to the dashboard for direct downloading of MS365, GitHub, and Azure generated lists.
+
+### Improved
+- **Clean Code Architecture:** Extracted all dashboard JavaScript into a dedicated `static/js/dashboard.js` file.
+- **Live Log Intelligence:** Expanded the "Hide Polls" filter to exclude static assets, login requests, and root heartbeat pings.
+- **UI Layout:** Equalized the dimensions of the "Recent Task Activity" and "Scheduled Runs" modules for a balanced layout.
+- **Robust Error Handling:** Added comprehensive error reporting and notifications for all AJAX operations.
+
+### Fixed
+- **CSRF Protection:** Resolved issues with missing CSRF tokens in AJAX-submitted forms.
+- **Stats Corruption:** Fixed a bug in the stats manager that was corrupting non-dictionary configuration values.
+- **Healthcheck:** Updated Docker healthcheck to support HTTPS/SSL environments.
+
 ## [1.8.0] - 2025-12-28
 
 ### Improved

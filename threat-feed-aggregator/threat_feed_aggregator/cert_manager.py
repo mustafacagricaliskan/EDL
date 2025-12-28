@@ -1,13 +1,13 @@
-import os
+import datetime
 import logging
+import os
+
+import certifi
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
-import datetime
-import certifi
 
 # Define certificate paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +30,7 @@ def generate_self_signed_cert():
         return CERT_FILE, KEY_FILE
 
     print("Generating self-signed certificate...")
-    
+
     # Generate private key
     key = rsa.generate_private_key(
         public_exponent=65537,
@@ -39,11 +39,11 @@ def generate_self_signed_cert():
 
     # Generate certificate
     subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, u"TR"),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, u"Istanbul"),
-        x509.NameAttribute(NameOID.LOCALITY_NAME, u"Istanbul"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"Threat Feed Aggregator"),
-        x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "TR"),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Istanbul"),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, "Istanbul"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Threat Feed Aggregator"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
     ])
 
     cert = x509.CertificateBuilder().subject_name(
@@ -55,12 +55,12 @@ def generate_self_signed_cert():
     ).serial_number(
         x509.random_serial_number()
     ).not_valid_before(
-        datetime.datetime.now(datetime.timezone.utc)
+        datetime.datetime.now(datetime.UTC)
     ).not_valid_after(
         # Valid for 10 years
-        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650)
+        datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=3650)
     ).add_extension(
-        x509.SubjectAlternativeName([x509.DNSName(u"localhost")]),
+        x509.SubjectAlternativeName([x509.DNSName("localhost")]),
         critical=False,
     ).sign(key, hashes.SHA256())
 
@@ -88,7 +88,7 @@ def process_pfx_upload(pfx_data, password):
         # Load the PKCS12 data
         if isinstance(password, str):
             password = password.encode()
-            
+
         private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
             pfx_data,
             password
@@ -111,7 +111,7 @@ def process_pfx_upload(pfx_data, password):
             if additional_certificates:
                 for cert in additional_certificates:
                     f.write(cert.public_bytes(serialization.Encoding.PEM))
-        
+
         return True, "Certificate uploaded successfully."
     except Exception as e:
         logging.error(f"Error processing PFX: {e}")
@@ -125,10 +125,10 @@ def process_root_ca_upload(cert_content):
         # 1. Save the extra CA
         with open(EXTRA_CA_FILE, "wb") as f:
             f.write(cert_content)
-            
+
         # 2. Update the bundle
         update_trusted_bundle()
-        
+
         return True, "Root CA uploaded and trust store updated."
     except Exception as e:
         logging.error(f"Error processing Root CA: {e}")
@@ -140,22 +140,22 @@ def update_trusted_bundle():
     """
     try:
         # Read default certifi bundle
-        with open(certifi.where(), "r", encoding="utf-8") as f:
+        with open(certifi.where(), encoding="utf-8") as f:
             default_ca = f.read()
-            
+
         # Read our extra CA if it exists
         extra_ca = ""
         if os.path.exists(EXTRA_CA_FILE):
-            with open(EXTRA_CA_FILE, "r", encoding="utf-8") as f:
+            with open(EXTRA_CA_FILE, encoding="utf-8") as f:
                 extra_ca = f.read()
-                
+
         # Write combined
         with open(TRUSTED_BUNDLE_FILE, "w", encoding="utf-8") as f:
             f.write(default_ca)
             if extra_ca:
                 f.write("\n\n# --- Custom Root CA ---\n")
                 f.write(extra_ca)
-        
+
         logging.info(f"Trusted certificate bundle updated at {TRUSTED_BUNDLE_FILE}")
         return TRUSTED_BUNDLE_FILE
     except Exception as e:

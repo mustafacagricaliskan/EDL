@@ -1,8 +1,9 @@
-import requests
-import aiohttp
 import logging
+
+import aiohttp
+import requests
+
 from .utils import get_proxy_settings
-from .config_manager import read_config
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ async def get_async_session():
     # Use ThreadedResolver for maximum compatibility and stability
     resolver = aiohttp.ThreadedResolver()
     connector = aiohttp.TCPConnector(resolver=resolver)
-    
+
     return aiohttp.ClientSession(connector=connector)
 
 def fetch_data_from_url(url):
@@ -43,7 +44,7 @@ async def fetch_data_from_url_async(url, session=None):
     """
     try:
         _, proxy_url, _ = get_proxy_settings()
-        
+
         if session:
             async with session.get(url, timeout=30, proxy=proxy_url) as response:
                 response.raise_for_status()

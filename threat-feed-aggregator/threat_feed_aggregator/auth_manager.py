@@ -1,22 +1,16 @@
-import os
-import json
 import logging
 import ssl
-from ldap3 import Server, Connection, ALL, NTLM, SIMPLE, Tls
 
-from .db_manager import (
-    check_admin_credentials, 
-    set_admin_password, 
-    verify_local_user, 
-    get_profile_by_ldap_groups,
-    get_user_permissions,
-    local_user_exists
-)
+from ldap3 import ALL, Connection, Server, Tls
+
+from .db_manager import get_profile_by_ldap_groups, get_user_permissions, local_user_exists, verify_local_user
 
 logger = logging.getLogger(__name__)
 
 from functools import wraps
-from flask import session, abort, flash, redirect, url_for
+
+from flask import flash, redirect, session, url_for
+
 
 def permission_required(module, level='r'):
     """
@@ -29,10 +23,10 @@ def permission_required(module, level='r'):
         def decorated_function(*args, **kwargs):
             if not session.get('logged_in'):
                 return redirect(url_for('auth.login'))
-            
+
             perms = session.get('permissions', {})
             user_level = perms.get(module, 'none')
-            
+
             # If level required is 'rw', user must have 'rw'
             # If level required is 'r', user can have 'r' or 'rw'
             has_permission = False
@@ -42,34 +36,24 @@ def permission_required(module, level='r'):
             elif level == 'rw':
                 if user_level == 'rw':
                     has_permission = True
-            
+
             if not has_permission:
                 logger.warning(f"Permission Denied for user {session.get('username')} on {module}:{level}")
                 flash(f"Access Denied: You do not have {level} permissions for {module}.", "danger")
                 return redirect(url_for('dashboard.index'))
-                
+
             return f(*args, **kwargs)
         return decorated_function
     return decorator
 
-def check_credentials(username, password):
+def _check_ldap_credentials(username, password):
     """
-    Checks credentials against local users (DB) and configured LDAP.
-    Returns: (bool, message, info_dict)
+    Helper function to handle LDAP authentication logic.
     """
-    # 1. Check Local DB (Admin + Other Local Users)
-    if local_user_exists(username):
-        if verify_local_user(username, password):
-            perms = get_user_permissions(username)
-            return True, "Local login successful.", {"username": username, "source": "local", "permissions": perms}
-        else:
-            return False, "Invalid credentials.", None
-
-    # 2. Check LDAP if enabled
     from .config_manager import read_config
     config = read_config()
     auth_config = config.get('auth', {})
-    
+
     ldap_enabled = auth_config.get('ldap_enabled')
     if ldap_enabled is None:
         ldap_config = auth_config.get('ldap', {})
@@ -77,7 +61,7 @@ def check_credentials(username, password):
         servers_list = [ldap_config] if ldap_enabled else []
     else:
         servers_list = auth_config.get('ldap_servers', [])
-            
+
     if not ldap_enabled:
         return False, "LDAP authentication is disabled.", None
 
@@ -97,7 +81,7 @@ def check_credentials(username, password):
 
         if not server_hostname or not base_dn:
             continue
-        
+
         try:
             tls_config = None
             if ldaps_enabled:
@@ -107,7 +91,7 @@ def check_credentials(username, password):
                     tls_config = Tls(validate=ssl.CERT_NONE)
 
             server = Server(server_hostname, port=server_port, get_info=ALL, use_ssl=ldaps_enabled, tls=tls_config, connect_timeout=5)
-            
+
             # Formats to try for Active Directory / LDAP
             possible_dns = []
             if "@" in username or "," in username or "\\" in username:
@@ -125,23 +109,24 @@ def check_credentials(username, password):
                     conn = Connection(server, user=test_dn, password=password, auto_bind=True)
                     if conn.bound:
                         # Success! Now fetch groups for RBAC
-                        search_filter = f"( |(sAMAccountName={username.split('\\')[-1]})(uid={username.split('\\')[-1]})(cn={username.split('\\')[-1]})(userPrincipalName={test_dn}))"
+                        short_username = username.split('\\')[-1]
+                        search_filter = f"( |(sAMAccountName={short_username})(uid={short_username})(cn={short_username})(userPrincipalName={test_dn}))"
                         conn.search(base_dn, search_filter, attributes=['memberOf', 'distinguishedName'])
-                        
+
                         user_groups = []
                         if len(conn.entries) > 0:
                             user_entry = conn.entries[0]
                             if 'memberOf' in user_entry:
                                 user_groups = [str(g) for g in user_entry['memberOf'].values]
-                        
+
                         # --- RBAC Logic: Match LDAP groups to Profiles ---
                         profile_id = get_profile_by_ldap_groups(user_groups)
-                        
+
                         # Fallback to legacy admin_group check if no specific mapping found
                         if not profile_id and admin_group:
                             if any(admin_group.lower() in g.lower() for g in user_groups):
                                 profile_id = 1 # Super_User
-                        
+
                         if not profile_id:
                             conn.unbind()
                             return False, "Authenticated but no matching Admin Profile found for your groups.", None
@@ -155,8 +140,8 @@ def check_credentials(username, password):
 
                         conn.unbind()
                         return True, "LDAP Login Successful.", {
-                            "username": username, 
-                            "source": "ldap", 
+                            "username": username,
+                            "source": "ldap",
                             "profile_name": profile_data['name'] if profile_data else 'Unknown',
                             "permissions": permissions
                         }
@@ -168,3 +153,19 @@ def check_credentials(username, password):
             last_error = f"Connection failed: {str(conn_e)}"
 
     return False, f"LDAP Auth Failed: {last_error}", None
+
+def check_credentials(username, password):
+    """
+    Checks credentials against local users (DB) and configured LDAP.
+    Returns: (bool, message, info_dict)
+    """
+    # 1. Check Local DB (Admin + Other Local Users)
+    if local_user_exists(username):
+        if verify_local_user(username, password):
+            perms = get_user_permissions(username)
+            return True, "Local login successful.", {"username": username, "source": "local", "permissions": perms}
+        else:
+            return False, "Invalid credentials.", None
+
+    # 2. Check LDAP if enabled
+    return _check_ldap_credentials(username, password)

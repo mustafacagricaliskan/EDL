@@ -1,8 +1,9 @@
-import sqlite3
 import logging
 import os
+import sqlite3
 import threading
 from contextlib import contextmanager
+
 from ..config_manager import DATA_DIR
 from ..constants import DB_TIMEOUT
 

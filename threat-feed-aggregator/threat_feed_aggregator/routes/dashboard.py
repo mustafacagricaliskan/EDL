@@ -1,13 +1,10 @@
-from flask import render_template, request, session, redirect, url_for
-from datetime import datetime, timezone
 import logging
+from datetime import datetime
+
+from flask import render_template
+
 from ..config_manager import read_config, read_stats
-from ..db_manager import (
-    get_unique_indicator_count,
-    get_indicator_counts_by_type,
-    get_country_stats,
-    get_whitelist
-)
+from ..db_manager import get_country_stats, get_indicator_counts_by_type, get_unique_indicator_count, get_whitelist
 from ..utils import SAFE_ITEMS, format_timestamp
 from . import bp_dashboard
 from .auth import login_required
@@ -19,15 +16,15 @@ logger = logging.getLogger(__name__)
 def index():
     config = read_config()
     stats = read_stats()
-    
+
     total_indicator_count = get_unique_indicator_count()
     indicator_counts_by_type = get_indicator_counts_by_type()
     country_stats = get_country_stats()
     whitelist = get_whitelist()
-    
+
     # Sort safe list for display
     safe_list_sorted = sorted(list(SAFE_ITEMS))
-    
+
     # Format timestamps
     formatted_stats = {}
     for key, value in stats.items():
@@ -39,13 +36,14 @@ def index():
             formatted_stats[key] = value
 
     # Scheduler access
-    from ..app import scheduler
     import pytz
-    
+
+    from ..app import scheduler
+
     target_tz = pytz.timezone(config.get('timezone', 'UTC'))
     scheduled_jobs = scheduler.get_jobs()
     jobs_for_template = []
-    
+
     from apscheduler.triggers.interval import IntervalTrigger
 
     for job in scheduled_jobs:
@@ -77,5 +75,6 @@ def index():
 @login_required
 def download_file(filename):
     from flask import send_from_directory
+
     from ..config_manager import DATA_DIR
     return send_from_directory(DATA_DIR, filename, as_attachment=True)

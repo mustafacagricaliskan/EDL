@@ -1,28 +1,26 @@
+import asyncio
+import logging
 import os
 import time
-import logging
-import asyncio
-from datetime import datetime, timezone
-from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 
-from .data_collector import fetch_data_from_url_async, fetch_data_from_url
-from .parsers import get_parser, identify_indicator_type
+from .config_manager import DATA_DIR, read_config, read_stats, write_stats
+from .data_collector import fetch_data_from_url_async
+from .db_manager import delete_whitelisted_indicators as db_delete_whitelisted_indicators
 from .db_manager import (
-    remove_old_indicators, 
-    get_all_indicators, 
-    get_whitelist, 
-    upsert_indicators_bulk, 
-    delete_whitelisted_indicators as db_delete_whitelisted_indicators,
-    log_job_start,
+    get_all_indicators,
+    get_api_blacklist_items,
+    get_whitelist,
     log_job_end,
+    log_job_start,
     recalculate_scores,
+    remove_old_indicators,
     save_historical_stats,
-    db_transaction,
-    get_api_blacklist_items
+    upsert_indicators_bulk,
 )
-from .utils import is_whitelisted
 from .geoip_manager import get_country_code
-from .config_manager import read_config, read_stats, write_stats, BASE_DIR, DATA_DIR
+from .parsers import get_parser
+from .utils import is_whitelisted
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -35,7 +33,7 @@ def update_job_status(source_name, status, details=None):
     CURRENT_JOB_STATUS[source_name] = {
         "status": status,
         "details": details,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 def clear_job_status(source_name):
@@ -46,7 +44,7 @@ def clear_job_status(source_name):
 def _cleanup_whitelisted_items_from_db():
     whitelist_db_items = get_whitelist()
     whitelist_filters = [w['item'] for w in whitelist_db_items]
-    
+
     if not whitelist_filters:
         return
 
@@ -58,7 +56,7 @@ def _cleanup_whitelisted_items_from_db():
         whitelisted, _ = is_whitelisted(indicator, whitelist_filters)
         if whitelisted:
             indicators_to_delete.append(indicator)
-    
+
     if indicators_to_delete:
         chunk_size = 900
         for i in range(0, len(indicators_to_delete), chunk_size):
@@ -70,19 +68,19 @@ def regenerate_edl_files():
     Optimized: Regenerates EDL files using an iterator to handle millions of records with low memory.
     """
     logger.info("Regenerating EDL files from database...")
-    from .db_manager import get_all_indicators_iter, get_api_blacklist_items
+    from .db_manager import get_all_indicators_iter
     try:
         # Instead of loading everything to a dict, we'll process in chunks or stream if possible.
         # But our formatters currently expect a dict. Let's adapt them to be more memory efficient.
         # For now, let's load efficiently.
         indicators_data = {row['indicator']: {
-            'last_seen': row['last_seen'], 
-            'country': row['country'], 
+            'last_seen': row['last_seen'],
+            'country': row['country'],
             'type': row['type'],
             'risk_score': row['risk_score'],
             'source_count': row['source_count']
         } for row in get_all_indicators_iter()}
-        
+
         # --- Merge API Blacklist Items ---
         # Treat them as high-confidence (Risk Score 100) items
         api_blacklist_items = get_api_blacklist_items()
@@ -99,7 +97,7 @@ def regenerate_edl_files():
             else:
                 indicators_data[ind]['risk_score'] = 100
 
-        from .output_formatter import format_for_palo_alto, format_for_fortinet, format_for_url_list
+        from .output_formatter import format_for_fortinet, format_for_palo_alto, format_for_url_list
 
         palo_alto_output = format_for_palo_alto(indicators_data)
         with open(os.path.join(DATA_DIR, "palo_alto_edl.txt"), "w") as f:
@@ -112,7 +110,7 @@ def regenerate_edl_files():
         url_list_output = format_for_url_list(indicators_data)
         with open(os.path.join(DATA_DIR, "url_list.txt"), "w") as f:
             f.write(url_list_output)
-            
+
         logger.info(f"EDL files regenerated. (Total records: {len(indicators_data)})")
         return True, "Lists regenerated successfully."
     except Exception as e:
@@ -133,7 +131,7 @@ class FeedAggregator:
         url = source_config["url"]
         data_format = source_config.get("format", "text")
         start_time = time.time()
-        
+
         raw_data = None
         items_with_type = []
 
@@ -144,13 +142,13 @@ class FeedAggregator:
             username = source_config.get("username")
             password = source_config.get("password")
             collection_id = source_config.get("collection_id")
-            
+
             loop = asyncio.get_event_loop()
             items_with_type = await loop.run_in_executor(None, fetch_and_parse_taxii, url, collection_id, username, password)
             raw_data = "TAXII_PROCESSED"
         else:
             raw_data = await fetch_data_from_url_async(url, session=session)
-        
+
         duration = time.time() - start_time
         return raw_data, items_with_type, duration
 
@@ -165,7 +163,7 @@ class FeedAggregator:
         name = source_config["name"]
 
         if data_format == "taxii":
-            return [] 
+            return []
 
         parser = get_parser(data_format)
         return parser(raw_data, source_name=name, key=key_or_column, column=key_or_column)
@@ -173,7 +171,7 @@ class FeedAggregator:
     def filter_whitelist(self, items):
         whitelist_db = get_whitelist(conn=self.db_conn)
         whitelist_filters = [w['item'] for w in whitelist_db]
-        
+
         filtered_items = []
         for item, item_type in items:
             if not item or item_type == "unknown":
@@ -194,7 +192,7 @@ class FeedAggregator:
                 except Exception:
                     pass
             enriched_data.append((item, country, item_type))
-            
+
             if (i + 1) % 10000 == 0:
                 update_job_status(source_name, "Enriching", f"Enriched {i + 1}/{total} items...")
         return enriched_data
@@ -205,14 +203,14 @@ class FeedAggregator:
         """
         batch_size = 5000
         total_batches = (len(items) + batch_size - 1) // batch_size
-        
+
         logger.info(f"[{source_name}] Starting DB upsert for {len(items)} items in {total_batches} batches.")
         update_job_status(source_name, "Saving", f"Writing {len(items)} items (0/{total_batches} batches)...")
-        
+
         for i in range(0, len(items), batch_size):
             batch = items[i:i + batch_size]
             current_batch_num = (i // batch_size) + 1
-            
+
             max_retries = 3
             for attempt in range(max_retries):
                 try:
@@ -231,14 +229,14 @@ class FeedAggregator:
     async def process_source(self, source_config, recalculate=True, session=None):
         name = source_config["name"]
         loop = asyncio.get_event_loop()
-        
+
         # Log Start (DB Op - Run in Executor)
         job_id = await loop.run_in_executor(None, log_job_start, name, self.db_conn)
         update_job_status(name, "Fetching", f"Downloading from {source_config['url']}")
 
         try:
             raw_data, items, duration = await self.fetch_data(source_config, session=session)
-            
+
             if raw_data:
                 if not items and source_config.get("format") != "taxii":
                     update_job_status(name, "Parsing", "Parsing data format...")
@@ -256,30 +254,30 @@ class FeedAggregator:
                     await loop.run_in_executor(None, self.save_batch, enriched_items, name)
 
                 count = len(enriched_items)
-                
+
                 if recalculate:
                     update_job_status(name, "Scoring", "Recalculating risk scores...")
                     try:
                         full_config = read_config()
                         confidence_map = {s['name']: s.get('confidence', 50) for s in full_config.get('source_urls', [])}
-                    except:
+                    except Exception:
                         confidence_map = {name: source_config.get('confidence', 50)}
-                    
+
                     await loop.run_in_executor(None, recalculate_scores, confidence_map, self.db_conn)
 
                 await loop.run_in_executor(None, log_job_end, job_id, "success", count, f"Fetch time: {duration:.2f}s", self.db_conn)
                 update_job_status(name, "Completed", f"Processed {count} items.")
-                
+
                 return {
                     "name": name,
                     "count": count,
                     "fetch_time": f"{duration:.2f} seconds",
-                    "last_updated": datetime.now(timezone.utc).isoformat()
+                    "last_updated": datetime.now(UTC).isoformat()
                 }
             else:
                 await loop.run_in_executor(None, log_job_end, job_id, "warning", 0, "No data fetched", self.db_conn)
                 update_job_status(name, "Completed", "No data fetched.")
-                return {"name": name, "count": 0, "fetch_time": f"{duration:.2f} seconds", "last_updated": datetime.now(timezone.utc).isoformat()}
+                return {"name": name, "count": 0, "fetch_time": f"{duration:.2f} seconds", "last_updated": datetime.now(UTC).isoformat()}
 
         except Exception as e:
             logger.error(f"Error processing {name}: {e}")
@@ -290,21 +288,21 @@ class FeedAggregator:
 async def aggregate_sources_async(source_urls):
     aggregator = FeedAggregator()
     from .data_collector import get_async_session
-    
+
     # Create a single session for all requests
     async with await get_async_session() as session:
         tasks = [aggregator.process_source(source, recalculate=False, session=session) for source in source_urls]
         results = []
-        
+
         # Process all feeds concurrently
         results_or_exceptions = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         for res in results_or_exceptions:
             if isinstance(res, Exception):
                 logger.error(f"Task failed with: {res}")
             else:
                 results.append(res)
-                
+
         return results
 
 def run_aggregator(source_urls):
@@ -313,7 +311,7 @@ def run_aggregator(source_urls):
     """
     config = read_config()
     default_lifetime = config.get("indicator_lifetime_days", 30)
-    
+
     # Cleanup Old Indicators
     retention_map = {s['name']: s.get('retention_days', default_lifetime) for s in source_urls}
     remove_old_indicators(retention_map, default_lifetime)
@@ -325,7 +323,7 @@ def run_aggregator(source_urls):
     # --- Run Async Event Loop ---
     try:
         results = asyncio.run(aggregate_sources_async(source_urls))
-        
+
         for result in results:
             if result:
                 name = result["name"]
@@ -345,10 +343,10 @@ def run_aggregator(source_urls):
 
     _cleanup_whitelisted_items_from_db()
 
-    current_stats["last_updated"] = datetime.now(timezone.utc).isoformat()
+    current_stats["last_updated"] = datetime.now(UTC).isoformat()
     write_stats(current_stats)
     save_historical_stats()
-    regenerate_edl_files() 
+    regenerate_edl_files()
     return {"url_counts": all_url_counts, "processed_data": []}
 
 def aggregate_single_source(source_config, recalculate=True):
@@ -367,7 +365,7 @@ def fetch_and_process_single_feed(source_config):
     try:
         # Run aggregation and capture result
         result = aggregate_single_source(source_config)
-        
+
         # Update Stats immediately
         if result:
             current_stats = read_stats()
@@ -377,16 +375,16 @@ def fetch_and_process_single_feed(source_config):
                 "last_updated": result["last_updated"]
             }
             # Update global last_updated too
-            current_stats["last_updated"] = datetime.now(timezone.utc).isoformat()
+            current_stats["last_updated"] = datetime.now(UTC).isoformat()
             write_stats(current_stats)
 
         _cleanup_whitelisted_items_from_db()
-        regenerate_edl_files() 
+        regenerate_edl_files()
         logger.info(f"Completed scheduled fetch for {name}.")
     except Exception as e:
         logger.error(f"Scheduled fetch failed for {name}: {e}")
 
-# Re-alias main to run_aggregator for app.py compatibility if needed, 
+# Re-alias main to run_aggregator for app.py compatibility if needed,
 # though we changed app.py to import 'run_aggregator' from 'aggregator' via 'main as run_aggregator'
 # so keeping function name 'run_aggregator' but aliasing it as main is safer.
 main = run_aggregator
@@ -413,16 +411,16 @@ def test_feed_source(source_config):
                 items = aggregator.parse_data(raw_data, source_config)
 
             valid_items = [item for item, item_type in items if item and item_type != "unknown"]
-            
+
             count = len(valid_items)
             sample = valid_items[:5]
-            
+
             if count == 0:
                  return False, "Data fetched but no valid indicators found.", []
-                 
+
             return True, f"Success! Found {count} valid indicators.", sample
 
         except Exception as e:
             return False, f"Error testing feed: {str(e)}", []
-            
+
     return asyncio.run(_test())

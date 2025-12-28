@@ -1,7 +1,9 @@
-import requests
-import re
-import os
 import logging
+import os
+import re
+
+import requests
+
 from .config_manager import DATA_DIR
 from .utils import aggregate_ips, get_proxy_settings
 
@@ -21,7 +23,7 @@ def get_latest_azure_json_url():
         proxies, _, _ = get_proxy_settings()
         response = requests.get(DOWNLOAD_PAGE_URL, headers=headers, timeout=10, proxies=proxies)
         response.raise_for_status()
-        
+
         # Regex to find the JSON download link
         # Look for href containing "ServiceTags_Public" and ending in .json
         match = re.search(r'href="([^"]*ServiceTags_Public[^"]+\.json)"', response.text)
@@ -32,7 +34,7 @@ def get_latest_azure_json_url():
             match = re.search(r'(https://download.microsoft.com/download/.*?\.json)', response.text)
             if match:
                  return match.group(1)
-            
+
             logger.error("Could not find Azure JSON download link on the page.")
             return None
     except Exception as e:
@@ -65,12 +67,12 @@ def process_azure_feeds():
         "azure_westeurope_ips.txt": lambda v: v['properties']['region'] == 'westeurope',
         "azure_northeurope_ips.txt": lambda v: v['properties']['region'] == 'northeurope'
     }
-    
+
     generated_files = []
-    
+
     # Iterate over all values in the JSON
     values = data.get('values', [])
-    
+
     # Pre-calculate lists for targets
     results = {k: [] for k in targets.keys()}
 
@@ -78,7 +80,7 @@ def process_azure_feeds():
         address_prefixes = item.get('properties', {}).get('addressPrefixes', [])
         if not address_prefixes:
             continue
-            
+
         for filename, filter_func in targets.items():
             if filter_func(item):
                 results[filename].extend(address_prefixes)

@@ -47,27 +47,31 @@ class TestAuthManager(unittest.TestCase):
         self.assertEqual(message, "Invalid credentials.")
 
     @patch('threat_feed_aggregator.config_manager.read_config')
-    def test_ldap_disabled(self, mock_read_config):
+    @patch('threat_feed_aggregator.auth_manager.local_user_exists')
+    def test_ldap_disabled(self, mock_exists, mock_read_config):
+        mock_exists.return_value = False
         mock_read_config.return_value = {'auth': {'ldap_enabled': False}}
         # Since 'admin' is checked first, need to ensure it fails to reach LDAP check
-        with patch('threat_feed_aggregator.auth_manager.check_admin_credentials', return_value=False):
-            success, message, _ = check_credentials('non_admin_user', 'password')
-            self.assertFalse(success)
-            self.assertEqual(message, "LDAP authentication is disabled.")
+        success, message, _ = check_credentials('non_admin_user', 'password')
+        self.assertFalse(success)
+        self.assertEqual(message, "LDAP authentication is disabled.")
 
     @patch('threat_feed_aggregator.config_manager.read_config')
-    def test_ldap_enabled_not_configured(self, mock_read_config):
+    @patch('threat_feed_aggregator.auth_manager.local_user_exists')
+    def test_ldap_enabled_not_configured(self, mock_exists, mock_read_config):
+        mock_exists.return_value = False
         mock_read_config.return_value = {'auth': {'ldap_enabled': True, 'ldap_servers': []}} 
-        with patch('threat_feed_aggregator.auth_manager.check_admin_credentials', return_value=False):
-            success, message, _ = check_credentials('user', 'password')
-            self.assertFalse(success)
-            self.assertEqual(message, "LDAP server list is empty.")
+        success, message, _ = check_credentials('user', 'password')
+        self.assertFalse(success)
+        self.assertEqual(message, "LDAP server list is empty.")
 
     @patch('threat_feed_aggregator.config_manager.read_config')
     @patch('threat_feed_aggregator.auth_manager.Connection')
     @patch('threat_feed_aggregator.auth_manager.Server')
     @patch('threat_feed_aggregator.auth_manager.get_profile_by_ldap_groups')
-    def test_ldap_login_success(self, mock_get_profile, mock_server, mock_connection, mock_read_config):
+    @patch('threat_feed_aggregator.auth_manager.local_user_exists')
+    def test_ldap_login_success(self, mock_exists, mock_get_profile, mock_server, mock_connection, mock_read_config):
+        mock_exists.return_value = False
         mock_read_config.return_value = {
             'auth': {'ldap_enabled': True, 'ldap_servers': [{'server': 'ldap.example.com', 'port': 389, 'domain': 'dc=example,dc=com'}]}
         }
@@ -78,17 +82,18 @@ class TestAuthManager(unittest.TestCase):
         
         mock_get_profile.return_value = 1 # Admin Profile
 
-        with patch('threat_feed_aggregator.auth_manager.check_admin_credentials', return_value=False):
-            success, message, _ = check_credentials('testuser', 'ldappassword')
-            self.assertTrue(success)
-            self.assertEqual(message, "LDAP Login Successful.")
-            mock_server.assert_called_with('ldap.example.com', port=389, get_info=unittest.mock.ANY, use_ssl=False, tls=None, connect_timeout=5)
-            mock_conn_instance.unbind.assert_called_once()
+        success, message, _ = check_credentials('testuser', 'ldappassword')
+        self.assertTrue(success)
+        self.assertEqual(message, "LDAP Login Successful.")
+        mock_server.assert_called_with('ldap.example.com', port=389, get_info=unittest.mock.ANY, use_ssl=False, tls=None, connect_timeout=5)
+        mock_conn_instance.unbind.assert_called_once()
 
     @patch('threat_feed_aggregator.config_manager.read_config')
     @patch('threat_feed_aggregator.auth_manager.Connection')
     @patch('threat_feed_aggregator.auth_manager.Server')
-    def test_ldap_login_failure(self, mock_server, mock_connection, mock_read_config):
+    @patch('threat_feed_aggregator.auth_manager.local_user_exists')
+    def test_ldap_login_failure(self, mock_exists, mock_server, mock_connection, mock_read_config):
+        mock_exists.return_value = False
         mock_read_config.return_value = {
              'auth': {'ldap_enabled': True, 'ldap_servers': [{'server': 'ldap.example.com', 'port': 389, 'domain': 'dc=example,dc=com'}]}
         }
@@ -96,22 +101,22 @@ class TestAuthManager(unittest.TestCase):
         mock_conn_instance.bound = False # Bind failed
         mock_connection.return_value = mock_conn_instance
 
-        with patch('threat_feed_aggregator.auth_manager.check_admin_credentials', return_value=False):
-            success, message, _ = check_credentials('testuser', 'wrongpassword')
-            self.assertFalse(success)
-            self.assertIn("LDAP Auth Failed", message)
+        success, message, _ = check_credentials('testuser', 'wrongpassword')
+        self.assertFalse(success)
+        self.assertIn("LDAP Auth Failed", message)
 
     @patch('threat_feed_aggregator.config_manager.read_config')
     @patch('threat_feed_aggregator.auth_manager.Connection', side_effect=Exception("LDAP connection error"))
     @patch('threat_feed_aggregator.auth_manager.Server')
-    def test_ldap_login_exception(self, mock_server, mock_connection, mock_read_config):
+    @patch('threat_feed_aggregator.auth_manager.local_user_exists')
+    def test_ldap_login_exception(self, mock_exists, mock_server, mock_connection, mock_read_config):
+        mock_exists.return_value = False
         mock_read_config.return_value = {
              'auth': {'ldap_enabled': True, 'ldap_servers': [{'server': 'ldap.example.com', 'port': 389, 'domain': 'dc=example,dc=com'}]}
         }
-        with patch('threat_feed_aggregator.auth_manager.check_admin_credentials', return_value=False):
-            success, message, _ = check_credentials('testuser', 'password')
-            self.assertFalse(success)
-            self.assertIn("LDAP Auth Failed", message)
+        success, message, _ = check_credentials('testuser', 'password')
+        self.assertFalse(success)
+        self.assertIn("LDAP Auth Failed", message)
 
 # New test class for read_config to better isolate patching CONFIG_FILE
 class TestReadConfig(unittest.TestCase):

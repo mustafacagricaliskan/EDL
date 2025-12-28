@@ -1,9 +1,9 @@
-import json
 import csv
-from io import StringIO
-import re
 import ipaddress
+import json
 import logging
+import re
+from io import StringIO
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +87,14 @@ def parse_mixed_text(raw_data, source_name="Unknown", **kwargs):
     lines = raw_data.splitlines()
     total_lines = len(lines)
     logger.info(f"[{source_name}] Starting parse of {total_lines} lines...")
-    
+
     for i, line in enumerate(lines):
         stripped_line = line.strip()
         if not stripped_line or stripped_line.startswith('#'):
             continue
-        
+
         indicator_type = identify_indicator_type(stripped_line)
-        
+
         # Normalization for De-duplication
         if indicator_type == 'domain':
             stripped_line = stripped_line.lower()
@@ -112,7 +112,7 @@ def parse_mixed_text(raw_data, source_name="Unknown", **kwargs):
                 pass
 
         parsed_items.append((stripped_line, indicator_type))
-        
+
         # Log progress every 50,000 lines
         if (i + 1) % 50000 == 0:
             logger.info(f"[{source_name}] Parsed {i + 1}/{total_lines} lines...")
@@ -132,11 +132,11 @@ def parse_json_with_type(raw_data, key=None, **kwargs):
         elif itype == 'cidr':
             try:
                 item = str(ipaddress.ip_network(item, strict=False))
-            except: pass
+            except Exception: pass
         elif itype == 'ip':
             try:
                 item = str(ipaddress.ip_address(item))
-            except: pass
+            except Exception: pass
         normalized_items.append((item, itype))
     return normalized_items
 
@@ -155,11 +155,11 @@ def parse_csv_with_type(raw_data, column=0, **kwargs):
         elif itype == 'cidr':
             try:
                 item = str(ipaddress.ip_network(item, strict=False))
-            except: pass
+            except Exception: pass
         elif itype == 'ip':
             try:
                 item = str(ipaddress.ip_address(item))
-            except: pass
+            except Exception: pass
         normalized_items.append((item, itype))
     return normalized_items
 

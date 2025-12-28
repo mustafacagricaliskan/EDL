@@ -1,7 +1,9 @@
-import requests
-import uuid
-import os
 import logging
+import os
+import uuid
+
+import requests
+
 from .config_manager import DATA_DIR
 from .utils import aggregate_ips, get_proxy_settings
 
@@ -15,7 +17,7 @@ def fetch_microsoft_data():
     """
     request_id = str(uuid.uuid4())
     url = MS_ENDPOINT_URL.format(request_id)
-    
+
     try:
         proxies, _, _ = get_proxy_settings()
         response = requests.get(url, timeout=20, proxies=proxies)
@@ -64,7 +66,7 @@ def process_microsoft_feeds():
             optimized_ips = aggregate_ips(content["ips"])
             filename = f"ms365_{service.lower()}_ips.txt"
             file_path = os.path.join(DATA_DIR, filename)
-            
+
             with open(file_path, 'w') as f:
                 f.write("\n".join(optimized_ips))
             generated_files.append(filename)
@@ -75,7 +77,7 @@ def process_microsoft_feeds():
             unique_urls = sorted(list(set(content["urls"])))
             filename = f"ms365_{service.lower()}_urls.txt"
             file_path = os.path.join(DATA_DIR, filename)
-            
+
             with open(file_path, 'w') as f:
                 f.write("\n".join(unique_urls))
             generated_files.append(filename)

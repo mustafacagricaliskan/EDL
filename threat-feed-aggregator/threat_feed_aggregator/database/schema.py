@@ -1,6 +1,7 @@
-import logging
 import json
-from ..database.connection import db_transaction, DB_WRITE_LOCK
+import logging
+
+from ..database.connection import DB_WRITE_LOCK, db_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ def init_db(conn=None):
                         source_count INTEGER DEFAULT 1 -- New: Source Count
                     )
                 ''')
-                
+
                 # Schema Migration for existing tables
                 cursor = db.execute("PRAGMA table_info(indicators)")
                 columns = [info[1] for info in cursor.fetchall()]
@@ -146,10 +147,10 @@ def init_db(conn=None):
                         db.execute('ALTER TABLE users ADD COLUMN profile_id INTEGER DEFAULT 1')
                     except Exception as ex:
                         logger.error(f"Migration error (profile_id): {ex}")
-                    
+
                     # Ensure admin has correct profile
                     db.execute("UPDATE users SET profile_id = 1 WHERE username = 'admin'")
-                
+
                 db.commit()
             except Exception as e:
                 logger.error(f"Error initializing database: {e}")

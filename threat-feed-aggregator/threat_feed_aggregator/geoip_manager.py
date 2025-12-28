@@ -1,7 +1,8 @@
-import os
 import logging
-import geoip2.database
+import os
 from functools import lru_cache
+
+import geoip2.database
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Set to INFO for production

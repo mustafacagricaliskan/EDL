@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.9.1] - 2025-12-28
+
+### Added
+- **Backward Compatibility:** Restored `db_manager.py` as a facade to ensure legacy modules and third-party integrations continue to function after the v1.9 refactoring.
+
+### Fixed
+- **Security:** Upgraded pycares to v4.9.0 to address a use-after-free vulnerability (CVE-2024-51523).
+- **Security:** Upgraded Requests to v2.32.4 to resolve a potential .netrc credential leak (CVE-2024-35195).
+- **Code Quality:** Fixed critical syntax errors in f-strings (Python 3.11 compatibility) and malformed regex patterns in TAXII services.
+- **Bug Fix:** Resolved a missing import in `system.py` that prevented admin password updates.
+- **Complexity:** Refactored highly complex functions (`check_credentials`, `is_whitelisted`, `remove_indicator`) into manageable, testable components.
+- **Robustness:** Replaced all bare `except:` statements with explicit `except Exception:` handling.
+
+### Improved
+- **Documentation:** Modernized `README.md` with visual badges and structured enterprise feature highlights.
+- **Linting:** Achieved compliance with modern **Ruff** linting standards and optimized imports.
+
 ## [1.9.0] - 2025-12-28
 
 ### Added

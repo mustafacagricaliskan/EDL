@@ -1,32 +1,31 @@
-from flask import jsonify, request, send_file, flash, redirect, url_for
-from datetime import datetime, timezone
 import io
-import os
-import zipfile
-import threading
 import logging
+import os
+import threading
+import zipfile
+from datetime import datetime
 
-from ..config_manager import DATA_DIR, read_config
-from ..aggregator import CURRENT_JOB_STATUS, regenerate_edl_files, test_feed_source, run_aggregator
-from ..microsoft_services import process_microsoft_feeds
-from ..github_services import process_github_feeds
+from flask import flash, jsonify, redirect, request, send_file, url_for
+
+from ..aggregator import CURRENT_JOB_STATUS, regenerate_edl_files, run_aggregator, test_feed_source
 from ..azure_services import process_azure_feeds
+from ..config_manager import DATA_DIR, read_config
 from ..db_manager import (
-    get_historical_stats, 
-    get_job_history, 
-    clear_job_history, 
-    add_api_blacklist_item, 
-    remove_api_blacklist_item,
+    add_api_blacklist_item,
     add_whitelist_item,
-    remove_whitelist_item,
+    clear_job_history,
+    get_historical_stats,
+    get_job_history,
     get_whitelist,
-    get_api_blacklist_items
+    remove_api_blacklist_item,
+    remove_whitelist_item,
 )
+from ..github_services import process_github_feeds
 from ..log_manager import get_live_logs
-from ..utils import add_to_safe_list, remove_from_safe_list, format_timestamp
-
+from ..microsoft_services import process_microsoft_feeds
+from ..utils import add_to_safe_list, format_timestamp, remove_from_safe_list
 from . import bp_api
-from .auth import login_required, api_key_required
+from .auth import api_key_required, login_required
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +40,12 @@ def aggregation_task(update_status=True):
     global AGGREGATION_STATUS
     if update_status:
         AGGREGATION_STATUS = "running"
-    
+
     config = read_config()
     source_urls = config.get("source_urls", [])
 
     run_aggregator(source_urls)
-    
+
     if update_status:
         AGGREGATION_STATUS = "completed"
     logging.debug("aggregation_task completed.")
@@ -59,7 +58,7 @@ def run_script():
     if AGGREGATION_STATUS == "running":
         logging.info("Aggregation already running, returning status.")
         return jsonify({"status": AGGREGATION_STATUS})
-    
+
     AGGREGATION_STATUS = "running"
     thread = threading.Thread(target=aggregation_task)
     thread.start()
@@ -72,14 +71,14 @@ def run_single_feed(name):
     """Triggers a single feed update in the background."""
     config = read_config()
     source = next((s for s in config.get('source_urls', []) if s['name'] == name), None)
-    
+
     if not source:
         return jsonify({"status": "error", "message": "Source not found"}), 404
-        
+
     from ..aggregator import fetch_and_process_single_feed
     thread = threading.Thread(target=fetch_and_process_single_feed, args=(source,))
     thread.start()
-    
+
     return jsonify({"status": "running", "message": f"Fetch started for {name}"})
 
 @bp_api.route('/status')
@@ -98,17 +97,17 @@ def status_detailed():
 @login_required
 def get_scheduled_jobs():
     """Returns sorted list of upcoming scheduled jobs."""
-    from ..app import scheduler
     import pytz
+
+    from ..app import scheduler
     from ..config_manager import read_config
-    from apscheduler.triggers.interval import IntervalTrigger
-    
+
     config = read_config()
     target_tz = pytz.timezone(config.get('timezone', 'UTC'))
-    
+
     jobs = scheduler.get_jobs()
     formatted_jobs = []
-    
+
     for job in jobs:
         next_run = job.next_run_time.astimezone(target_tz) if job.next_run_time else None
         time_until = 'N/A'
@@ -133,10 +132,10 @@ def get_scheduled_jobs():
             'next_run_timestamp': next_run.timestamp() if next_run else 0,
             'time_until': time_until
         })
-    
+
     # Sort by nearest run time
     formatted_jobs.sort(key=lambda x: x['next_run_timestamp'] if x['next_run_timestamp'] > 0 else float('inf'))
-    
+
     return jsonify(formatted_jobs)
 
 @bp_api.route('/trend_data')
@@ -145,16 +144,16 @@ def trend_data():
     """Returns historical stats for the chart."""
     days = request.args.get('days', default=30, type=int)
     data = get_historical_stats(days)
-    
+
     # Format dates for Chart.js using configured TZ
     formatted_data = []
     for row in data:
         try:
             row['timestamp'] = format_timestamp(row['timestamp'], fmt='%Y-%m-%d %H:%M')
             formatted_data.append(row)
-        except:
+        except Exception:
             pass
-            
+
     return jsonify(formatted_data)
 
 @bp_api.route('/history')
@@ -168,7 +167,7 @@ def job_history():
         try:
             # We need raw datetime objects for duration calculation before formatting
             start_dt = datetime.fromisoformat(item['start_time'])
-            
+
             if item['end_time']:
                 end_dt = datetime.fromisoformat(item['end_time'])
                 duration = (end_dt - start_dt).total_seconds()
@@ -176,7 +175,7 @@ def job_history():
                 item['end_time'] = format_timestamp(item['end_time'], fmt='%H:%M:%S')
             else:
                 item['duration'] = "Running..."
-            
+
             item['start_time'] = format_timestamp(item['start_time'], fmt='%Y-%m-%d %H:%M:%S')
         except Exception:
             pass
@@ -211,21 +210,21 @@ def clear_live_logs_route():
 @login_required
 def source_stats_api():
     """Returns current counts and last updated times for all sources."""
-    from ..config_manager import read_stats, read_config
-    from ..db_manager import get_unique_indicator_count, get_indicator_counts_by_type
-    
+    from ..config_manager import read_config, read_stats
+    from ..db_manager import get_indicator_counts_by_type, get_unique_indicator_count
+
     stats = read_stats()
     config = read_config()
-    
+
     total_count = get_unique_indicator_count()
     counts_by_type = get_indicator_counts_by_type()
-    
+
     formatted_stats = {}
     for name, data in stats.items():
         if name == 'last_updated':
             formatted_stats[name] = format_timestamp(data)
             continue
-            
+
         if isinstance(data, dict) and 'last_updated' in data:
             formatted_stats[name] = {
                 "count": data.get('count', 0),
@@ -233,7 +232,7 @@ def source_stats_api():
             }
         else:
             formatted_stats[name] = data
-            
+
     return jsonify({
         "sources": formatted_stats,
         "totals": {
@@ -299,12 +298,12 @@ def backup_system():
         with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
             # Files to backup
             files_to_backup = ['config.json', 'threat_feed.db', 'safe_list.txt', 'jobs.sqlite']
-            
+
             for filename in files_to_backup:
                 file_path = os.path.join(DATA_DIR, filename)
                 if os.path.exists(file_path):
                     zf.write(file_path, filename)
-        
+
         memory_file.seek(0)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         return send_file(
@@ -322,12 +321,12 @@ def restore_system():
     if 'backup_file' not in request.files:
         flash('No file part', 'danger')
         return redirect(url_for('dashboard.index'))
-        
+
     file = request.files['backup_file']
     if file.filename == '':
         flash('No selected file', 'danger')
         return redirect(url_for('dashboard.index'))
-        
+
     if file and file.filename.endswith('.zip'):
         try:
             with zipfile.ZipFile(file) as zf:
@@ -337,17 +336,17 @@ def restore_system():
                     if name not in valid_files or '..' in name or name.startswith('/'):
                         raise ValueError(f"Invalid file in archive: {name}")
                 zf.extractall(DATA_DIR)
-                
+
             flash('System restored successfully. Configuration reloaded.', 'success')
-            
+
             # Trigger config reload in main app logic if possible
             # Ideally we expose update_scheduled_jobs in a shared way
             # For now, simplistic reload
             from ..app import update_scheduled_jobs
             update_scheduled_jobs()
-            
+
             return redirect(url_for('dashboard.index'))
-            
+
         except Exception as e:
             flash(f'Error restoring backup: {str(e)}', 'danger')
             return redirect(url_for('dashboard.index'))
@@ -392,21 +391,21 @@ def api_test_feed():
         data = request.get_json()
         if not data:
             return jsonify({'status': 'error', 'message': 'No data provided'})
-        
+
         name = data.get('name', 'Test')
         url = data.get('url')
         data_format = data.get('format', 'text')
         key_or_column = data.get('key_or_column')
-        
+
         source_config = {
             "name": name,
             "url": url,
             "format": data_format,
             "key_or_column": key_or_column
         }
-        
+
         success, message, sample = test_feed_source(source_config)
-        
+
         return jsonify({
             'status': 'success' if success else 'error',
             'message': message,
@@ -434,15 +433,15 @@ def add_indicator():
         data = request.get_json()
         if not data:
             return jsonify({'status': 'error', 'message': 'No data provided'}), 400
-        
+
         action_type = data.get('type') # whitelist or blacklist
         value = data.get('value')
         comment = data.get('comment', 'Added via API')
         item_type = data.get('item_type', 'ip')
-        
+
         if not value or not action_type:
             return jsonify({'status': 'error', 'message': 'Missing value or type'}), 400
-            
+
         # Validation
         from ..utils import validate_indicator
         is_valid, _ = validate_indicator(value)
@@ -452,88 +451,78 @@ def add_indicator():
         if action_type.lower() == 'whitelist':
             # Whitelist Logic
             success, msg = add_whitelist_item(value, description=comment)
-        
+
         elif action_type.lower() == 'blacklist':
             # Blacklist Logic
             success, msg = add_api_blacklist_item(value, item_type=item_type, comment=comment)
-            # Trigger immediate background regeneration if needed? 
-            # Ideally we should, but for performance maybe just let it be picked up on next run 
+            # Trigger immediate background regeneration if needed?
+            # Ideally we should, but for performance maybe just let it be picked up on next run
             # or we can force a quick update of the files.
             if success:
                 # Regenerate files to reflect changes immediately
                 # Note: This doesn't run the full fetch, just DB -> File generation
                 try:
                     regenerate_edl_files()
-                except:
+                except Exception:
                     pass
         else:
             return jsonify({'status': 'error', 'message': 'Invalid type. Use whitelist or blacklist'}), 400
-            
+
         if success:
             return jsonify({'status': 'success', 'message': msg})
         else:
             return jsonify({'status': 'error', 'message': msg}), 400
-            
+
     except Exception as e:
         logger.error(f"API Error adding indicator: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+def _handle_api_indicator_removal(value, type_hint):
+    """Helper to perform the actual removal from DB."""
+    deleted = False
+    msgs = []
+
+    # Try Blacklist
+    if not type_hint or type_hint == 'blacklist':
+        if remove_api_blacklist_item(value):
+            deleted = True
+            msgs.append("Removed from Blacklist")
+
+    # Try Whitelist
+    if not type_hint or type_hint == 'whitelist':
+        w_list = get_whitelist()
+        found_id = next((item['id'] for item in w_list if item['item'] == value), None)
+
+        if found_id and remove_whitelist_item(found_id):
+            deleted = True
+            msgs.append("Removed from Whitelist")
+
+    return deleted, msgs
 
 @bp_api.route('/indicators', methods=['DELETE'])
 @api_key_required
 def remove_indicator():
     """
     Remove an indicator via API.
-    Payload:
-    {
-        "value": "1.2.3.4",
-        "type": "whitelist" | "blacklist" (optional hint, otherwise tries both)
-    }
     """
     try:
         data = request.get_json()
-        if not data:
-            return jsonify({'status': 'error', 'message': 'No data provided'}), 400
-            
+        if not data or not data.get('value'):
+            return jsonify({'status': 'error', 'message': 'Missing value'}), 400
+
         value = data.get('value')
         type_hint = data.get('type')
-        
-        if not value:
-             return jsonify({'status': 'error', 'message': 'Missing value'}), 400
-        
-        deleted = False
-        msgs = []
-        
-        # Try Blacklist
-        if not type_hint or type_hint == 'blacklist':
-            if remove_api_blacklist_item(value):
-                deleted = True
-                msgs.append("Removed from Blacklist")
-        
-        # Try Whitelist
-        if not type_hint or type_hint == 'whitelist':
-            # Whitelist removal by value requires finding ID first or modifying DB function
-            # Since our DB function `remove_whitelist_item` takes ID, let's look it up.
-            w_list = get_whitelist()
-            found_id = None
-            for item in w_list:
-                if item['item'] == value:
-                    found_id = item['id']
-                    break
-            
-            if found_id:
-                if remove_whitelist_item(found_id):
-                    deleted = True
-                    msgs.append("Removed from Whitelist")
-        
+
+        deleted, msgs = _handle_api_indicator_removal(value, type_hint)
+
         if deleted:
-            # Regenerate files
             try:
                 regenerate_edl_files()
-            except:
+            except Exception:
                 pass
             return jsonify({'status': 'success', 'message': ", ".join(msgs)})
-        else:
-            return jsonify({'status': 'error', 'message': 'Item not found'}), 404
+
+        return jsonify({'status': 'error', 'message': 'Item not found'}), 404
 
     except Exception as e:
         logger.error(f"API Error removing indicator: {e}")

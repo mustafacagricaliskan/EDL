@@ -1,8 +1,9 @@
 import ipaddress
-import os
 import logging
-import pytz
+import os
 from datetime import datetime
+
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -15,23 +16,23 @@ def format_timestamp(ts_str, fmt='%d/%m/%Y %H:%M'):
     """
     if not ts_str or ts_str == 'N/A':
         return 'N/A'
-        
+
     try:
         from .config_manager import read_config
         config = read_config()
         tz_name = config.get('timezone', 'UTC')
         target_tz = pytz.timezone(tz_name)
-        
+
         # Parse ISO string
         if isinstance(ts_str, str):
             dt = datetime.fromisoformat(ts_str)
         else:
             dt = ts_str # Already a datetime object
-            
+
         # Convert to target TZ
         if dt.tzinfo is None:
             dt = pytz.utc.localize(dt)
-            
+
         local_dt = dt.astimezone(target_tz)
         return local_dt.strftime(fmt)
     except Exception as e:
@@ -45,17 +46,17 @@ def load_safe_list():
     """
     safe_items = set()
     safe_networks = []
-    
+
     if not os.path.exists(SAFE_LIST_FILE):
         return safe_items, safe_networks
 
     try:
-        with open(SAFE_LIST_FILE, 'r') as f:
+        with open(SAFE_LIST_FILE) as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
                     continue
-                
+
                 # Check if it's a CIDR
                 if '/' in line:
                     try:
@@ -67,7 +68,7 @@ def load_safe_list():
                     safe_items.add(line)
     except Exception as e:
         logger.error(f"Error loading safe list: {e}")
-        
+
     return safe_items, safe_networks
 
 # Load safe list once on module import (or reload periodically if needed)
@@ -81,7 +82,7 @@ def reload_safe_list():
 def add_to_safe_list(item):
     """Adds an item to the safe list file."""
     if not item: return False, "Empty item"
-    
+
     # Check if already exists (simple check)
     if item in SAFE_ITEMS:
         return False, "Item already in safe list"
@@ -90,7 +91,7 @@ def add_to_safe_list(item):
         # Append to file
         with open(SAFE_LIST_FILE, 'a') as f:
             f.write(f"\n{item}")
-        
+
         # Reload memory
         reload_safe_list()
         return True, "Item added to safe list"
@@ -104,9 +105,9 @@ def remove_from_safe_list(item_to_remove):
         return False, "Safe list file not found"
 
     try:
-        with open(SAFE_LIST_FILE, 'r') as f:
+        with open(SAFE_LIST_FILE) as f:
             lines = f.readlines()
-        
+
         with open(SAFE_LIST_FILE, 'w') as f:
             found = False
             for line in lines:
@@ -114,68 +115,86 @@ def remove_from_safe_list(item_to_remove):
                     found = True
                     continue # Skip this line
                 f.write(line)
-        
+
         if found:
             reload_safe_list()
             return True, "Item removed from safe list"
         else:
             return False, "Item not found in safe list"
-            
+
     except Exception as e:
         logger.error(f"Error removing from safe list file: {e}")
         return False, str(e)
+
+def _check_global_safelist(indicator):
+    """Checks against the hardcoded global safe list (IPs/CIDRs)."""
+    try:
+        if '/' in indicator:
+            input_obj = ipaddress.ip_network(indicator, strict=False)
+            for net in SAFE_NETWORKS:
+                if input_obj.subnet_of(net):
+                    return True, "Global Safe List (CIDR)"
+        else:
+            input_obj = ipaddress.ip_address(indicator)
+            for net in SAFE_NETWORKS:
+                if input_obj in net:
+                    return True, "Global Safe List (CIDR)"
+    except ValueError:
+        pass
+    return False, None
 
 def is_whitelisted(indicator, whitelist_db_items=None, precomputed_db_nets=None):
     """
     Checks if an indicator is in the user-defined whitelist OR the global safe list.
     Supports IPs, CIDRs, and exact string matches for Domains.
-    
-    precomputed_db_nets: Optional list of ip_network objects for DB whitelist items.
     """
-    # 1. Check Global Safe List (Exact Match) - O(1)
-    if indicator in SAFE_ITEMS:
-        return True, "Global Safe List"
+    # 1. Global Safe List Check
+    is_safe, reason = _check_global_safelist(indicator)
+    if is_safe:
+        return True, reason
 
-    # 2. Check Global Safe List (CIDR) - Optimized
-    try:
-        is_cidr = '/' in indicator
-        if is_cidr:
-            input_obj = ipaddress.ip_network(indicator, strict=False)
-            for net in SAFE_NETWORKS:
-                if input_obj.subnet_of(net): return True, "Global Safe List (CIDR)"
-        else:
-            input_obj = ipaddress.ip_address(indicator)
-            for net in SAFE_NETWORKS:
-                if input_obj in net: return True, "Global Safe List (CIDR)"
-    except ValueError:
-        return False, None # Invalid indicator string
-
-    # 3. Check User DB Whitelist
+    # 2. User-defined Whitelist Check
     if whitelist_db_items:
-        # Exact match check first (O(1) if items is a set)
+        # Exact Match Check
         if indicator in whitelist_db_items:
-            return True, "User Whitelist"
-        
-        # CIDR check using precomputed objects if available, otherwise fallback
-        if precomputed_db_nets:
-            for w_net in precomputed_db_nets:
-                try:
-                    if is_cidr:
-                        if input_obj.subnet_of(w_net): return True, "User Whitelist (CIDR)"
-                    else:
-                        if input_obj in w_net: return True, "User Whitelist (CIDR)"
-                except: continue
-        else:
-            # Fallback (slow)
-            for w_item in whitelist_db_items:
-                if '/' in w_item:
+            return True, "User Whitelist (Exact)"
+
+        # CIDR Match Check
+        try:
+            if '/' in indicator:
+                input_obj = ipaddress.ip_network(indicator, strict=False)
+                is_cidr = True
+            else:
+                input_obj = ipaddress.ip_address(indicator)
+                is_cidr = False
+
+            if precomputed_db_nets:
+                for w_net in precomputed_db_nets:
                     try:
-                        w_net = ipaddress.ip_network(w_item, strict=False)
                         if is_cidr:
-                            if input_obj.subnet_of(w_net): return True, "User Whitelist (CIDR)"
+                            if input_obj.subnet_of(w_net):
+                                return True, "User Whitelist (CIDR)"
                         else:
-                            if input_obj in w_net: return True, "User Whitelist (CIDR)"
-                    except ValueError: pass
+                            if input_obj in w_net:
+                                return True, "User Whitelist (CIDR)"
+                    except Exception:
+                        continue
+            else:
+                # Fallback (slower path if nets not precomputed)
+                for w_item in whitelist_db_items:
+                    if '/' in w_item:
+                        try:
+                            w_net = ipaddress.ip_network(w_item, strict=False)
+                            if is_cidr:
+                                if input_obj.subnet_of(w_net):
+                                    return True, "User Whitelist (CIDR)"
+                            else:
+                                if input_obj in w_net:
+                                    return True, "User Whitelist (CIDR)"
+                        except ValueError:
+                            pass
+        except ValueError:
+            pass
 
     return False, None
 
@@ -185,7 +204,7 @@ def filter_whitelisted_items(items, whitelist_db_items):
     Highly optimized for bulk processing.
     """
     if not items: return []
-    
+
     # Precompute DB whitelist into sets and network objects
     db_items_set = set()
     db_nets = []
@@ -194,7 +213,7 @@ def filter_whitelisted_items(items, whitelist_db_items):
             w_str = w['item'] if isinstance(w, dict) else w
             if '/' in w_str:
                 try: db_nets.append(ipaddress.ip_network(w_str, strict=False))
-                except: db_items_set.add(w_str)
+                except Exception: db_items_set.add(w_str)
             else:
                 db_items_set.add(w_str)
 
@@ -202,7 +221,7 @@ def filter_whitelisted_items(items, whitelist_db_items):
     for item in items:
         # For tuples from parse_mixed_text (val, type)
         val = item[0] if isinstance(item, tuple) else item
-        
+
         # Pass precomputed data to avoid repeated overhead
         whitelisted, _ = is_whitelisted(val, db_items_set, db_nets)
         if not whitelisted:
@@ -265,12 +284,12 @@ def validate_indicator(item):
     # Very basic validation for domains/urls
     from urllib.parse import urlparse
     parsed = urlparse(item)
-    
+
     # If it has a scheme (http/https), check if it has a netloc (domain)
     if parsed.scheme in ('http', 'https'):
         if parsed.netloc and ' ' not in parsed.netloc:
             return True, "url"
-    
+
     # If no scheme, check if it looks like a domain (has a dot, no spaces)
     if '.' in item and ' ' not in item and not item.startswith('.'):
         # Basic check for common domain characters
@@ -289,31 +308,31 @@ def get_proxy_settings():
     from .config_manager import read_config
     config = read_config()
     proxy_config = config.get('proxy', {})
-    
+
     if not proxy_config.get('enabled'):
         return None, None, None
-        
+
     server = proxy_config.get('server')
     port = proxy_config.get('port')
     username = proxy_config.get('username')
     password = proxy_config.get('password')
-    
+
     if not server or not port:
         return None, None, None
-        
+
     # Format: http://user:pass@host:port or http://host:port
     auth_string = ""
     if username and password:
         auth_string = f"{username}:{password}@"
-        
+
     proxy_url = f"http://{auth_string}{server}:{port}"
-    
+
     # Requests format
     proxies = {
         "http": proxy_url,
         "https": proxy_url
     }
-    
+
     # Aiohttp Auth (if separate auth object needed, though URL encoding usually works)
     # Usually returning just the URL is enough for aiohttp if auth is embedded
     return proxies, proxy_url, None

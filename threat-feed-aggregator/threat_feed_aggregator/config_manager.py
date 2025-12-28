@@ -1,7 +1,8 @@
-import os
 import json
+import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 
 def get_base_path():
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -32,7 +33,7 @@ BASE_DIR = CODE_BASE_DIR # For backward compatibility if needed internally
 DATA_DIR = os.path.join(USER_DATA_DIR, "data")
 CONFIG_FILE_DEFAULT = os.path.join(CODE_BASE_DIR, "threat_feed_aggregator", "config", "config.json")
 # We copy config to user dir to allow editing
-CONFIG_FILE = os.path.join(DATA_DIR, "config.json") 
+CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
 STATS_FILE = os.path.join(DATA_DIR, "stats.json")
 
 # Ensure Data Dir Exists
@@ -59,16 +60,16 @@ _config_cache_mtime = 0
 def read_config():
     global _config_cache, _config_cache_mtime
     target_file = CONFIG_FILE
-    
+
     # Fallback to default if user config missing
     if not os.path.exists(target_file):
         # logger.warning(f"[Config] User config not found at {target_file}. Trying default.")
         target_file = CONFIG_FILE_DEFAULT
-        
+
     if not os.path.exists(target_file):
         # logger.error(f"[Config] No config file found anywhere. Returning empty.")
         return {"source_urls": []}
-        
+
     try:
         current_mtime = os.stat(target_file).st_mtime
         if _config_cache and current_mtime == _config_cache_mtime:
@@ -77,12 +78,12 @@ def read_config():
         # Debug: Check file stats
         # stats = os.stat(target_file)
         # logger.info(f"[Config] Reading {target_file} | Size: {stats.st_size} | Mtime: {stats.st_mtime}")
-        
-        with open(target_file, "r") as f:
+
+        with open(target_file) as f:
             data = json.load(f)
             _config_cache = data
             _config_cache_mtime = current_mtime
-            
+
             # Check specific keys to debug the issue
             # if 'proxy' in data:
             #      logger.info(f"[Config] READ CONTENT: Proxy Enabled={data['proxy'].get('enabled')}, Server={data['proxy'].get('server')}")
@@ -95,9 +96,9 @@ def read_config():
         if target_file != CONFIG_FILE_DEFAULT and os.path.exists(CONFIG_FILE_DEFAULT):
              try:
                  # logger.warning(f"[Config] Attempting fallback to default config due to corruption.")
-                 with open(CONFIG_FILE_DEFAULT, "r") as f:
+                 with open(CONFIG_FILE_DEFAULT) as f:
                      return json.load(f)
-             except:
+             except Exception:
                  pass
         return {"source_urls": []}
 
@@ -109,21 +110,21 @@ def write_config(config):
             json.dump(config, f, indent=4)
             f.flush()
             os.fsync(f.fileno()) # Force write to disk
-            
+
         # Update cache immediately to prevent stale reads
         _config_cache = config
         _config_cache_mtime = os.stat(CONFIG_FILE).st_mtime
-            
+
         # Verify write (Optional, can be removed for production speed)
         # with open(CONFIG_FILE, "r") as f: ...
-                
+
     except Exception as e:
         logger.error(f"[Config] ERROR writing config: {e}")
 
 def read_stats():
     if not os.path.exists(STATS_FILE):
         return {}
-    with open(STATS_FILE, "r") as f:
+    with open(STATS_FILE) as f:
         try:
             stats = json.load(f)
             if isinstance(stats, dict):
@@ -141,5 +142,5 @@ def write_stats(stats):
 def update_stats_last_updated(stats=None):
     if stats is None:
         stats = read_stats()
-    stats["last_updated"] = datetime.now(timezone.utc).isoformat()
+    stats["last_updated"] = datetime.now(UTC).isoformat()
     write_stats(stats)

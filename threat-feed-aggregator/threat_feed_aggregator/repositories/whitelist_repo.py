@@ -1,7 +1,8 @@
-import sqlite3
 import logging
-from datetime import datetime, timezone
-from ..database.connection import db_transaction, DB_WRITE_LOCK
+import sqlite3
+from datetime import UTC, datetime
+
+from ..database.connection import DB_WRITE_LOCK, db_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 def add_whitelist_item(item, description="", conn=None):
     if not item:
         return False, "Item is empty."
-    
+
     from ..utils import validate_indicator
     is_valid, _ = validate_indicator(item)
     if not is_valid:
@@ -18,8 +19,8 @@ def add_whitelist_item(item, description="", conn=None):
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
-                now_iso = datetime.now(timezone.utc).isoformat()
-                db.execute('INSERT INTO whitelist (item, description, added_at) VALUES (?, ?, ?)', 
+                now_iso = datetime.now(UTC).isoformat()
+                db.execute('INSERT INTO whitelist (item, description, added_at) VALUES (?, ?, ?)',
                              (item.strip(), description, now_iso))
                 db.commit()
                 return True, "Item added to whitelist."
@@ -58,8 +59,8 @@ def add_api_blacklist_item(item, item_type='ip', comment="", conn=None):
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
-                now_iso = datetime.now(timezone.utc).isoformat()
-                db.execute('INSERT INTO api_blacklist (item, type, comment, added_at) VALUES (?, ?, ?, ?)', 
+                now_iso = datetime.now(UTC).isoformat()
+                db.execute('INSERT INTO api_blacklist (item, type, comment, added_at) VALUES (?, ?, ?, ?)',
                              (item.strip(), item_type, comment, now_iso))
                 db.commit()
                 return True, "Item added to blacklist."

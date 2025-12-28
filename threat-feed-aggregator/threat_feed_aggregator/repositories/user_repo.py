@@ -1,8 +1,10 @@
-import sqlite3
-import logging
 import json
-from werkzeug.security import generate_password_hash, check_password_hash
-from ..database.connection import db_transaction, DB_WRITE_LOCK
+import logging
+import sqlite3
+
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from ..database.connection import DB_WRITE_LOCK, db_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +14,7 @@ def set_admin_password(password, conn=None):
         with db_transaction(conn) as db:
             try:
                 hashed_password = generate_password_hash(password)
-                db.execute('INSERT OR REPLACE INTO users (username, password_hash) VALUES (?, ?)', 
+                db.execute('INSERT OR REPLACE INTO users (username, password_hash) VALUES (?, ?)',
                              ('admin', hashed_password))
                 db.commit()
                 return True, "Admin password set/updated."
@@ -56,7 +58,7 @@ def add_local_user(username, password, profile_id=1, conn=None): # profile_id de
         with db_transaction(conn) as db:
             try:
                 hashed_password = generate_password_hash(password)
-                db.execute('INSERT INTO users (username, password_hash, profile_id) VALUES (?, ?, ?)', 
+                db.execute('INSERT INTO users (username, password_hash, profile_id) VALUES (?, ?, ?)',
                              (username, hashed_password, profile_id))
                 db.commit()
                 return True, f"User {username} added."
@@ -71,7 +73,7 @@ def update_local_user_password(username, password, conn=None):
         with db_transaction(conn) as db:
             try:
                 hashed_password = generate_password_hash(password)
-                cursor = db.execute('UPDATE users SET password_hash = ? WHERE username = ?', 
+                cursor = db.execute('UPDATE users SET password_hash = ? WHERE username = ?',
                                   (hashed_password, username))
                 db.commit()
                 if cursor.rowcount > 0:
@@ -85,7 +87,7 @@ def delete_local_user(username, conn=None):
     """Deletes a local user (prevents deleting 'admin')."""
     if username == 'admin':
         return False, "Cannot delete the default admin account."
-        
+
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
@@ -136,7 +138,7 @@ def add_admin_profile(name, description, permissions, conn=None):
 def delete_admin_profile(profile_id, conn=None):
     if profile_id in (1, 2, 3): # Protect default profiles
         return False, "Cannot delete default profiles."
-    
+
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
@@ -151,7 +153,7 @@ def delete_admin_profile(profile_id, conn=None):
 def update_admin_profile(profile_id, description, permissions, conn=None):
     if profile_id == 1: # Protect Super_User permissions
         return False, "Cannot modify Super_User permissions."
-        
+
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
@@ -175,7 +177,7 @@ def get_user_permissions(username, conn=None):
         if row:
             try:
                 return json.loads(row['permissions'])
-            except:
+            except Exception:
                 return {} # Fallback
         return {} # Default no permissions
 
@@ -223,24 +225,24 @@ def get_profile_by_ldap_groups(user_groups, conn=None):
         try:
             cursor = db.execute('SELECT group_dn, profile_id FROM ldap_group_mappings')
             mappings = cursor.fetchall()
-            
+
             normalized_user_groups = [g.lower() for g in user_groups]
             matched_profile_ids = []
-            
+
             for mapping in mappings:
                 if mapping['group_dn'].lower() in normalized_user_groups:
                     matched_profile_ids.append(mapping['profile_id'])
-            
+
             if not matched_profile_ids:
                 return None
-                
+
             # If any matched profile is Super_User (1), return it
             if 1 in matched_profile_ids:
                 return 1
-                
+
             # Otherwise return the first matched (or logic can be added for 2 > 3 etc)
             return matched_profile_ids[0]
         except Exception as e:
             logger.error(f"Error checking LDAP group mappings: {e}")
-        
+
         return None

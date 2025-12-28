@@ -31,9 +31,10 @@ class TestMissingCoverage(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Threat Investigation', response.data)
 
-    @patch('threat_feed_aggregator.routes.tools.whois.whois')
-    @patch('threat_feed_aggregator.routes.tools.requests.post')
-    def test_lookup_ip_success(self, mock_post, mock_whois):
+    @patch('threat_feed_aggregator.services.investigation_service.whois.whois')
+    @patch('threat_feed_aggregator.services.investigation_service.requests.get')
+    @patch('threat_feed_aggregator.services.investigation_service.requests.post')
+    def test_lookup_ip_success(self, mock_post, mock_get, mock_whois):
         """Test the IP lookup API with successful external responses."""
         self.login()
         
@@ -41,6 +42,12 @@ class TestMissingCoverage(unittest.TestCase):
         mock_whois_entry = MagicMock()
         mock_whois_entry.text = "Mock WHOIS Data"
         mock_whois.return_value = mock_whois_entry
+
+        # Mock External API (ip-api.com)
+        mock_get_res = MagicMock()
+        mock_get_res.status_code = 200
+        mock_get_res.json.return_value = {'country': 'TestCountry', 'isp': 'TestISP'}
+        mock_get.return_value = mock_get_res
 
         # Mock External API (ip.thc.org)
         mock_response = MagicMock()
@@ -57,9 +64,10 @@ class TestMissingCoverage(unittest.TestCase):
         self.assertEqual(data['whois_data'], "Mock WHOIS Data")
         self.assertEqual(data['data']['domains'][0], "example.com")
 
-    @patch('threat_feed_aggregator.routes.tools.whois.whois')
-    @patch('threat_feed_aggregator.routes.tools.requests.post')
-    def test_lookup_ip_failure_external(self, mock_post, mock_whois):
+    @patch('threat_feed_aggregator.services.investigation_service.whois.whois')
+    @patch('threat_feed_aggregator.services.investigation_service.requests.get')
+    @patch('threat_feed_aggregator.services.investigation_service.requests.post')
+    def test_lookup_ip_failure_external(self, mock_post, mock_get, mock_whois):
         """Test the IP lookup API when external API fails."""
         self.login()
         
@@ -69,9 +77,8 @@ class TestMissingCoverage(unittest.TestCase):
         mock_whois.return_value = mock_whois_entry
 
         # Mock External API Failure
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_post.return_value = mock_response
+        mock_get.return_value = MagicMock(status_code=500)
+        mock_post.return_value = MagicMock(status_code=500)
 
         payload = {'ip': '8.8.8.8'}
         response = self.client.post('/tools/api/lookup_ip', json=payload)

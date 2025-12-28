@@ -1,6 +1,8 @@
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+
+[tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
@@ -26,23 +28,6 @@ line-ending = "auto"
 [tool.bandit]
 targets = ["threat_feed_aggregator/"]
 exclude_dirs = ["tests", "venv"]
-# For production, consider increasing the severity levels.
-# For CI, we want to catch all warnings/errors.
-# Check B101: assert_used - often used in tests
-# Check B104: hardcoded_bind_all_interfaces - covered by Docker/Gunicorn config, but app.run() uses it
-# Check B105: hardcoded_password_string - covered by env vars
-# Check B403: import_telnetlib - not relevant
-# Check B404: import_subprocess - used for Start-Process (if agent uses it) or legitimate subprocess calls
-# Check B603: subprocess_without_shell_true - sometimes needed
-# Check B607: start_process_with_explicit_filename - specific to Start-Process, not Python
 skips = [
-    "B101", # Use of assert detected (false positive in general code, good for test)
-    "B104", # Hardcoded bind to all interfaces (0.0.0.0) - explicit in app.run/gunicorn
-    "B105", # Hardcoded password string - covered by env var fallback
-    "B404", # Import of subprocess module (used for tests or Start-Process)
-    "B603", # subprocess call with no shell=True (false positive/depends on context)
-    "B607", # start_process_with_explicit_filename (specific to powershell commands)
-    "B703", # flask_debug_mode (we use it in dev)
-    "B506", # Flask jsonify() used with a string literal (security risk), but we jsonify objects
-    "B301", # pickle use (APScheduler uses it, we don't control fully)
+    "B101", "B104", "B105", "B404", "B603", "B607", "B703", "B506", "B301"
 ]

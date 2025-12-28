@@ -1,5 +1,5 @@
-from .db_manager import get_all_indicators
 from .utils import aggregate_ips
+
 
 def format_for_palo_alto(indicator_dict):
     """
@@ -16,10 +16,10 @@ def format_for_palo_alto(indicator_dict):
     for indicator, details in indicator_dict.items():
         if details.get('type') in ['ip', 'cidr']:
             raw_items.append(indicator)
-    
+
     # Optimize using CIDR aggregation
     aggregated_items = aggregate_ips(raw_items)
-    
+
     return "\n".join(aggregated_items)
 
 def format_for_fortinet(indicator_dict):
@@ -37,7 +37,7 @@ def format_for_fortinet(indicator_dict):
     for indicator, details in indicator_dict.items():
         if details.get('type') in ['ip', 'cidr']:
             raw_items.append(indicator)
-            
+
     # Optimize using CIDR aggregation
     aggregated_items = aggregate_ips(raw_items)
 

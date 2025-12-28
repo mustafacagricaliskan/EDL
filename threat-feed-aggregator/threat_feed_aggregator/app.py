@@ -1,19 +1,19 @@
 import logging
 import os
-from flask import Flask, redirect, url_for
-from apscheduler.schedulers.background import BackgroundScheduler
+
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.schedulers.background import BackgroundScheduler
+from flask import Flask
 from flask_wtf.csrf import CSRFProtect
 
-from .config_manager import DATA_DIR, read_config
-from .db_manager import init_db, set_admin_password, get_admin_password_hash
-from .cert_manager import generate_self_signed_cert, get_cert_paths, get_ca_bundle_path
-from .log_manager import setup_memory_logging
-from .aggregator import fetch_and_process_single_feed, run_aggregator
-from .microsoft_services import process_microsoft_feeds
-from .github_services import process_github_feeds
+from .aggregator import fetch_and_process_single_feed
 from .azure_services import process_azure_feeds
+from .cert_manager import generate_self_signed_cert, get_ca_bundle_path, get_cert_paths
+from .config_manager import DATA_DIR, read_config
+from .db_manager import get_admin_password_hash, init_db, set_admin_password
+from .github_services import process_github_feeds
+from .log_manager import setup_memory_logging
+from .microsoft_services import process_microsoft_feeds
 from .version import __version__
 
 # Initialize Memory Logging
@@ -41,7 +41,7 @@ ADMIN_PASSWORD_ENV = os.environ.get('ADMIN_PASSWORD')
 if not SECRET_KEY:
     logging.error("Environment variable 'SECRET_KEY' is not set. Please set it for production use.")
     SECRET_KEY = 'dev_key_do_not_use_in_production'
-    
+
 app.secret_key = os.getenv('SECRET_KEY', 'default_secret_key')
 
 # Jinja2 Filters
@@ -50,7 +50,7 @@ def from_json_filter(value):
     import json
     try:
         return json.loads(value)
-    except:
+    except Exception:
         return {}
 
 # CSRF Protection
@@ -114,8 +114,9 @@ def update_scheduled_jobs():
 generate_self_signed_cert()
 
 # Register Blueprints
-from .routes import bp_dashboard, bp_api, bp_auth, bp_system
+from .routes import bp_api, bp_auth, bp_dashboard, bp_system
 from .routes.tools import bp_tools
+
 app.register_blueprint(bp_dashboard)
 app.register_blueprint(bp_api) # Prefix /api
 app.register_blueprint(bp_auth)
@@ -124,7 +125,8 @@ app.register_blueprint(bp_tools)
 
 # Special Route handling to keep /status and /run compatible with existing JS
 # Or we can simply add alias routes here
-from .routes.api import status, run_script
+from .routes.api import run_script, status
+
 app.add_url_rule('/status', view_func=status)
 app.add_url_rule('/run', view_func=run_script)
 

@@ -1,7 +1,7 @@
-import sqlite3
 import logging
-from datetime import datetime, timezone
-from ..database.connection import db_transaction, DB_WRITE_LOCK
+from datetime import UTC, datetime
+
+from ..database.connection import DB_WRITE_LOCK, db_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +10,7 @@ def log_job_start(source_name, conn=None):
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
-                start_time = datetime.now(timezone.utc).isoformat()
+                start_time = datetime.now(UTC).isoformat()
                 cursor = db.execute(
                     'INSERT INTO job_history (source_name, start_time, status) VALUES (?, ?, ?)',
                     (source_name, start_time, 'running')
@@ -26,7 +26,7 @@ def log_job_end(job_id, status, items_processed=0, message=None, conn=None):
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
-                end_time = datetime.now(timezone.utc).isoformat()
+                end_time = datetime.now(UTC).isoformat()
                 db.execute('''
                     UPDATE job_history 
                     SET end_time = ?, status = ?, items_processed = ?, message = ?

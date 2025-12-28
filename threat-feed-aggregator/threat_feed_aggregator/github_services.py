@@ -1,6 +1,8 @@
-import requests
-import os
 import logging
+import os
+
+import requests
+
 from .config_manager import DATA_DIR
 from .utils import aggregate_ips, get_proxy_settings
 
@@ -40,16 +42,16 @@ def process_github_feeds():
     }
 
     generated_files = []
-    
+
     for label, key in categories.items():
         ips = data.get(key, [])
         if ips:
             # Aggregate IPs using our utility
             optimized_ips = aggregate_ips(ips)
-            
+
             filename = f"github_{label.lower()}_ips.txt"
             file_path = os.path.join(DATA_DIR, filename)
-            
+
             with open(file_path, 'w') as f:
                 f.write("\n".join(optimized_ips))
             generated_files.append(filename)

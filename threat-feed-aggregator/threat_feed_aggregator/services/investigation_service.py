@@ -1,8 +1,10 @@
-import requests
 import logging
+
+import requests
 import whois
-from ..utils import get_proxy_settings
+
 from ..constants import REQUEST_TIMEOUT_DEFAULT, USER_AGENT
+from ..utils import get_proxy_settings
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,7 @@ class InvestigationService:
             target_url = "https://ip.thc.org/api/v1/lookup"
             payload = {
                 "ip_address": ip_address,
-                "limit": 100 
+                "limit": 100
             }
             headers = {
                 "Content-Type": "application/json",

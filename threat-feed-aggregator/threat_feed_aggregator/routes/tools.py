@@ -47,15 +47,36 @@ def lookup_ip():
             "User-Agent": "ThreatFeedAggregator/1.0"
         }
         
-        # We need to verify SSL? ip.thc.org likely has valid certs.
         proxies, _, _ = get_proxy_settings()
-        response = requests.post(target_url, json=payload, headers=headers, timeout=10, proxies=proxies)
         
-        if response.status_code == 200:
-            thc_data = response.json()
-            return jsonify({'success': True, 'data': thc_data, 'whois_data': whois_data_str})
-        else:
-             return jsonify({'success': False, 'error': f"External API returned {response.status_code}"}), 502
+        # 1. IP-API.com (Geolocation, ISP, ASN)
+        ip_api_data = {}
+        try:
+            # Using http because the free endpoint doesn't support https usually, or it's rate limited differently.
+            # fields=66846719 (all fields)
+            ip_api_url = f"http://ip-api.com/json/{ip_address}?fields=status,message,continent,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,mobile,proxy,hosting,query"
+            r_ip = requests.get(ip_api_url, timeout=5, proxies=proxies)
+            if r_ip.status_code == 200:
+                ip_api_data = r_ip.json()
+        except Exception as e:
+            logger.warning(f"IP-API lookup failed: {e}")
+
+        # 2. THC API (Reverse DNS / Passive DNS)
+        thc_data = {}
+        try:
+            response = requests.post(target_url, json=payload, headers=headers, timeout=10, proxies=proxies)
+            if response.status_code == 200:
+                thc_data = response.json()
+        except Exception as e:
+            logger.warning(f"THC lookup failed: {e}")
+        
+        # Combine results
+        return jsonify({
+            'success': True, 
+            'data': thc_data, # Kept for backward compat or specific hosting data
+            'geo': ip_api_data,
+            'whois_data': whois_data_str
+        })
              
     except Exception as e:
         logger.error(f"Error in lookup_ip: {e}")

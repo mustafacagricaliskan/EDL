@@ -49,22 +49,27 @@
                 <div class="card-body">
                     <div class="row g-4">
                         <div class="col-md-6">
-                            <label class="form-label-custom">Geolocation</label>
-                            <div class="p-3 bg-light rounded-3 border">
-                                <div class="d-flex align-items-center mb-2">
-                                    <i class="fas fa-map-marker-alt text-danger me-2"></i>
-                                    <span id="resCountry" class="fw-bold">N/A</span>
-                                </div>
-                                <div id="resMapLink"></div>
+                            <label class="form-label-custom">Network Intelligence</label>
+                            <div class="p-3 bg-light rounded-3 border h-100">
+                                <div class="mb-2"><span class="text-muted small">Country:</span> <span id="resCountry" class="fw-bold text-dark">N/A</span> <span id="resFlag"></span></div>
+                                <div class="mb-2"><span class="text-muted small">City/Region:</span> <span id="resCity" class="fw-bold text-dark">N/A</span></div>
+                                <div class="mb-2"><span class="text-muted small">ISP:</span> <span id="resIsp" class="fw-bold text-dark">N/A</span></div>
+                                <div class="mb-2"><span class="text-muted small">ASN:</span> <span id="resAsn" class="fw-bold text-dark">N/A</span></div>
+                                <div class="mb-2"><span class="text-muted small">Organization:</span> <span id="resOrg" class="fw-bold text-dark">N/A</span></div>
+                                <div id="resMapLink" class="mt-3"></div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label-custom">Reverse DNS / Hosting</label>
                             <div class="p-3 bg-light rounded-3 border h-100">
-                                <ul id="resDomains" class="list-unstyled mb-0 small">
+                                <ul id="resDomains" class="list-unstyled mb-0 small" style="max-height: 200px; overflow-y: auto;">
                                     <li class="text-muted">No domains found.</li>
                                 </ul>
                             </div>
+                        </div>
+                        <div class="col-12">
+                             <label class="form-label-custom">WHOIS Data</label>
+                             <pre id="resWhois" class="p-3 bg-dark text-light rounded-3 border small mb-0" style="max-height: 200px; overflow-y: auto; white-space: pre-wrap;">-</pre>
                         </div>
                     </div>
                     
@@ -124,12 +129,22 @@
                     resultCard.classList.remove('d-none');
                     
                     document.getElementById('reportIpBadge').textContent = ip;
-                    document.getElementById('resCountry').textContent = data.country || 'Unknown';
                     
+                    // Geo Data
+                    const geo = data.geo || {};
+                    document.getElementById('resCountry').textContent = geo.country || 'Unknown';
+                    document.getElementById('resCity').textContent = `${geo.city || '-'}, ${geo.regionName || '-'}`;
+                    document.getElementById('resIsp').textContent = geo.isp || 'Unknown';
+                    document.getElementById('resAsn').textContent = geo.as || 'Unknown';
+                    document.getElementById('resOrg').textContent = geo.org || 'Unknown';
+                    
+                    // Hosting Data (from THC or others)
                     const domainsList = document.getElementById('resDomains');
                     domainsList.innerHTML = '';
-                    if (data.domains && data.domains.length > 0) {
-                        data.domains.forEach(d => {
+                    const domains = (data.data && data.data.domains) ? data.data.domains : [];
+                    
+                    if (domains.length > 0) {
+                        domains.forEach(d => {
                             const li = document.createElement('li');
                             li.className = 'mb-1 fw-bold text-dark';
                             li.textContent = d;
@@ -138,8 +153,11 @@
                     } else {
                         domainsList.innerHTML = '<li class="text-muted">No associated domains found.</li>';
                     }
+                    
+                    // WHOIS
+                    document.getElementById('resWhois').textContent = data.whois_data || 'No WHOIS record.';
 
-                    document.getElementById('resMapLink').innerHTML = `<a href="https://www.google.com/maps/search/?api=1&query=${ip}" target="_blank" class="small text-decoration-none"><i class="fas fa-map me-1"></i>View Location</a>`;
+                    document.getElementById('resMapLink').innerHTML = `<a href="https://www.google.com/maps/search/?api=1&query=${geo.lat || ip},${geo.lon || ''}" target="_blank" class="btn btn-sm btn-outline-primary w-100"><i class="fas fa-map me-2"></i>View on Map</a>`;
                     document.getElementById('vtLink').href = `https://www.virustotal.com/gui/ip-address/${ip}`;
                     document.getElementById('abuseLink').href = `https://www.abuseipdb.com/check/${ip}`;
                     document.getElementById('talosLink').href = `https://talosintelligence.com/reputation_center/lookup?search=${ip}`;

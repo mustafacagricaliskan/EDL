@@ -7,6 +7,7 @@ from ..cert_manager import process_pfx_upload, process_root_ca_upload
 from ..config_manager import read_config, write_config
 from ..db_manager import (
     add_admin_profile,
+    add_api_blacklist_item,
     add_ldap_group_mapping,
     add_local_user,
     add_whitelist_item,
@@ -18,6 +19,7 @@ from ..db_manager import (
     get_admin_profiles,
     get_all_users,
     get_ldap_group_mappings,
+    remove_api_blacklist_item,
     remove_whitelist_item,
     set_admin_password,
     update_admin_profile,
@@ -183,10 +185,6 @@ def add_source():
     confidence = request.form.get('confidence', default=50, type=int)
     retention_days = request.form.get('retention_days', type=int)
 
-    collection_id = request.form.get('collection_id')
-    username = request.form.get('username')
-    password = request.form.get('password')
-
     if name and url:
         config = read_config()
         new_source = {
@@ -198,9 +196,6 @@ def add_source():
         if key_or_column: new_source["key_or_column"] = key_or_column
         if schedule_interval_minutes: new_source["schedule_interval_minutes"] = schedule_interval_minutes
         if retention_days: new_source["retention_days"] = retention_days
-        if collection_id: new_source["collection_id"] = collection_id
-        if username: new_source["username"] = username
-        if password: new_source["password"] = password
 
         config["source_urls"].append(new_source)
         write_config(config)
@@ -222,10 +217,6 @@ def update_source(index):
     confidence = request.form.get('confidence', default=50, type=int)
     retention_days = request.form.get('retention_days', type=int)
 
-    collection_id = request.form.get('collection_id')
-    username = request.form.get('username')
-    password = request.form.get('password')
-
     if name and url:
         config = read_config()
         if 0 <= index < len(config["source_urls"]):
@@ -238,9 +229,6 @@ def update_source(index):
             if key_or_column: updated_source["key_or_column"] = key_or_column
             if schedule_interval_minutes: updated_source["schedule_interval_minutes"] = schedule_interval_minutes
             if retention_days: updated_source["retention_days"] = retention_days
-            if collection_id: updated_source["collection_id"] = collection_id
-            if username: updated_source["username"] = username
-            if password: updated_source["password"] = password
 
             config["source_urls"][index] = updated_source
             write_config(config)
@@ -772,6 +760,44 @@ def add_whitelist():
 def remove_whitelist(item_id):
     # Note: In app.py this was /remove_whitelist/<int:item_id>
     remove_whitelist_item(item_id)
+    return redirect(url_for('dashboard.index'))
+
+@bp_system.route('/blacklist/add', methods=['POST'])
+@login_required
+def add_blacklist():
+    item = request.form.get('item')
+    comment = request.form.get('comment', '')
+    item_type = request.form.get('type', 'ip')
+
+    if item:
+        from ..utils import validate_indicator
+        is_valid, inferred_type = validate_indicator(item)
+
+        if not is_valid:
+            flash(f'Error: "{item}" is not a valid IP, CIDR, or Domain/URL.', 'danger')
+            return redirect(url_for('dashboard.index'))
+        
+        if inferred_type and inferred_type != 'unknown':
+             item_type = inferred_type
+
+        success, message = add_api_blacklist_item(item, item_type=item_type, comment=comment)
+        if not success:
+            flash(f'Error: {message}', 'danger')
+        else:
+            flash(f'Success: {item} added to block list.', 'success')
+            # Trigger regeneration to include the new blacklist item immediately
+            from ..aggregator import regenerate_edl_files
+            regenerate_edl_files()
+
+    return redirect(url_for('dashboard.index'))
+
+@bp_system.route('/blacklist/remove/<path:item_val>', methods=['GET'])
+@login_required
+def remove_blacklist(item_val):
+    remove_api_blacklist_item(item_val)
+    # Trigger regeneration to remove the item immediately
+    from ..aggregator import regenerate_edl_files
+    regenerate_edl_files()
     return redirect(url_for('dashboard.index'))
 
 @bp_system.route('/change_password', methods=['POST'])

@@ -4,7 +4,13 @@ from datetime import datetime
 from flask import render_template
 
 from ..config_manager import read_config, read_stats
-from ..db_manager import get_country_stats, get_indicator_counts_by_type, get_unique_indicator_count, get_whitelist
+from ..db_manager import (
+    get_api_blacklist_items,
+    get_country_stats,
+    get_indicator_counts_by_type,
+    get_unique_indicator_count,
+    get_whitelist,
+)
 from ..utils import SAFE_ITEMS, format_timestamp
 from . import bp_dashboard
 from .auth import login_required
@@ -21,6 +27,7 @@ def index():
     indicator_counts_by_type = get_indicator_counts_by_type()
     country_stats = get_country_stats()
     whitelist = get_whitelist()
+    blacklist = get_api_blacklist_items()
 
     # Sort safe list for display
     safe_list_sorted = sorted(list(SAFE_ITEMS))
@@ -69,7 +76,7 @@ def index():
             'interval': f"{job.trigger.interval.total_seconds() / 60} minutes" if isinstance(job.trigger, IntervalTrigger) else 'N/A'
         })
 
-    return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template, total_indicator_count=total_indicator_count, indicator_counts_by_type=indicator_counts_by_type, whitelist=whitelist, country_stats=country_stats, safe_list=safe_list_sorted)
+    return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template, total_indicator_count=total_indicator_count, indicator_counts_by_type=indicator_counts_by_type, whitelist=whitelist, blacklist=blacklist, country_stats=country_stats, safe_list=safe_list_sorted)
 
 @bp_dashboard.route('/data/<path:filename>')
 @login_required

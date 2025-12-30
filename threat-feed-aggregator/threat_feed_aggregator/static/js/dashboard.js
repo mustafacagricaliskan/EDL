@@ -155,9 +155,57 @@ function updateLogs() {
 
             logWindow.textContent = '';
             data.forEach(line => {
-                if (hidePolls && (line.includes('GET /api/') || line.includes('GET /status') || line.includes('GET /static/') || line.includes('GET /login') || line.includes('GET / HTTP/1.1'))) return;
-                const div = document.createElement('div'); div.className = 'log-line mb-1'; div.textContent = line;
-                if (line.includes('ERROR')) div.style.color = '#f87171'; else if (line.includes('WARNING')) div.style.color = '#fbbf24'; else if (line.includes('SUCCESS') || line.includes('Completed') || line.includes('Written batch')) div.style.color = '#4ade80';
+                if (hidePolls && (line.includes('GET /api/') || line.includes('POST /api/') || line.includes('GET /status') || line.includes('GET /static/') || line.includes('GET /login') || line.includes('GET / HTTP/1.1'))) return;
+                
+                const div = document.createElement('div'); 
+                div.className = 'log-line mb-1';
+                
+                // Advanced Formatting for Access Logs
+                // Example: ... 172.18.0.1 - - [29/Dec/2025 22:43:21] "POST /system/blacklist/add HTTP/1.1" 302 -
+                const accessLogMatch = line.match(/(?:(?:\d{1,3}\.){3}\d{1,3}) - - \[(.*?)\] "(GET|POST|PUT|DELETE|PATCH) (.*?) HTTP\/[0-9.]+" (\d{3}) -/);
+                
+                if (accessLogMatch) {
+                    const timestamp = accessLogMatch[1].split(' ')[1]; // Just the time part
+                    const method = accessLogMatch[2];
+                    const path = accessLogMatch[3];
+                    const status = accessLogMatch[4];
+                    const ipMatch = line.match(/((?:\d{1,3}\.){3}\d{1,3})/);
+                    const ip = ipMatch ? ipMatch[0] : 'Unknown';
+
+                    let methodColor = '#60a5fa'; // Blue for GET
+                    if (method === 'POST') methodColor = '#fcd34d'; // Yellow for POST
+                    else if (method === 'DELETE') methodColor = '#f87171'; // Red
+                    
+                    let statusColor = '#4ade80'; // Green for 200
+                    if (status.startsWith('3')) statusColor = '#94a3b8'; // Grey/Blue for 300
+                    else if (status.startsWith('4') || status.startsWith('5')) statusColor = '#f87171'; // Red for errors
+
+                    div.innerHTML = `
+                        <span style="color:#64748b; font-size:0.8em;">[${timestamp}]</span>
+                        <span style="color:#94a3b8; font-size:0.8em;">${ip}</span>
+                        <span style="color:${methodColor}; font-weight:bold; margin-left:5px;">${method}</span>
+                        <span style="color:#e2e8f0;">${path}</span>
+                        <span style="color:${statusColor}; font-weight:bold; float:right;">${status}</span>
+                    `;
+                } else if (line.includes(' "GET ') || line.includes(' "POST ') || line.includes(' "PUT ') || line.includes(' "DELETE ')) {
+                    // Fallback for non-standard or partial lines
+                    const parts = line.split(' "');
+                    if (parts.length > 1) {
+                        const prefix = parts[0];
+                        const rest = parts[1];
+                        const methodUrl = rest.split('"')[0];
+                        const status = rest.split('"')[1] || '';
+                        div.innerHTML = `<span style="color:#aaa">${prefix}</span> <span style="color:#60a5fa; font-weight:bold;">"${methodUrl}"</span><span style="color:#fcd34d">${status}</span>`;
+                    } else {
+                        div.textContent = line;
+                    }
+                } else {
+                    div.textContent = line;
+                    if (line.includes('ERROR')) div.style.color = '#f87171'; 
+                    else if (line.includes('WARNING')) div.style.color = '#fbbf24'; 
+                    else if (line.includes('SUCCESS') || line.includes('Completed') || line.includes('Written batch')) div.style.color = '#4ade80';
+                }
+                
                 logWindow.appendChild(div);
             });
             if (wasAtBottom) logWindow.scrollTop = logWindow.scrollHeight;
@@ -320,6 +368,26 @@ function showAddWhitelistModal() {
     });
 }
 
+function showAddBlacklistModal() {
+    Swal.fire({ 
+        title: 'Add to Block List', 
+        html: '<input id="swal-input1" class="swal2-input" placeholder="IP/Domain"><input id="swal-input2" class="swal2-input" placeholder="Comment (Optional)">',
+        showCancelButton: true, 
+        confirmButtonText: 'Block',
+        preConfirm: () => {
+            return [
+                document.getElementById('swal-input1').value,
+                document.getElementById('swal-input2').value
+            ]
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            const [item, comment] = result.value;
+            if(item) submitForm(AppConfig.urls.addBlacklist, { item: item, comment: comment });
+        }
+    });
+}
+
 function initMap() {
     const data = AppConfig.countryStats;
     try { 
@@ -414,4 +482,5 @@ window.showAddSourceModal = showAddSourceModal;
 window.showEditSourceModal = showEditSourceModal;
 window.testSource = testSource;
 window.showAddWhitelistModal = showAddWhitelistModal;
+window.showAddBlacklistModal = showAddBlacklistModal;
 window.submitForm = submitForm;

@@ -129,28 +129,12 @@ class FeedAggregator:
         Fetches data from the source asynchronously.
         """
         url = source_config["url"]
-        data_format = source_config.get("format", "text")
         start_time = time.time()
 
-        raw_data = None
-        items_with_type = []
-
-        if data_format == "taxii":
-            # TAXII lib might be sync, keep it simple for now or wrap in executor if needed
-            # For this iteration, we assume fetch_and_parse_taxii is sync
-            from .taxii_services import fetch_and_parse_taxii
-            username = source_config.get("username")
-            password = source_config.get("password")
-            collection_id = source_config.get("collection_id")
-
-            loop = asyncio.get_event_loop()
-            items_with_type = await loop.run_in_executor(None, fetch_and_parse_taxii, url, collection_id, username, password)
-            raw_data = "TAXII_PROCESSED"
-        else:
-            raw_data = await fetch_data_from_url_async(url, session=session)
+        raw_data = await fetch_data_from_url_async(url, session=session)
 
         duration = time.time() - start_time
-        return raw_data, items_with_type, duration
+        return raw_data, [], duration
 
     # ... (parse_data, filter_whitelist, enrich_data, save_batch methods remain unchanged)
 
@@ -161,9 +145,6 @@ class FeedAggregator:
         data_format = source_config.get("format", "text")
         key_or_column = source_config.get("key_or_column")
         name = source_config["name"]
-
-        if data_format == "taxii":
-            return []
 
         parser = get_parser(data_format)
         return parser(raw_data, source_name=name, key=key_or_column, column=key_or_column)

@@ -77,38 +77,7 @@ if ADMIN_PASSWORD_ENV:
             logging.error(f"Failed to set initial admin password: {msg}")
 
 # Scheduler
-jobstores = {
-    'default': SQLAlchemyJobStore(url=f'sqlite:///{os.path.join(DATA_DIR, "jobs.sqlite")}')
-}
-scheduler = BackgroundScheduler(jobstores=jobstores)
-
-def update_scheduled_jobs():
-    """Refreshes the scheduler jobs based on current config."""
-    config = read_config()
-    configured_sources = {source['name']: source for source in config.get('source_urls', [])}
-
-    scheduler.remove_all_jobs()
-
-    for source_name, source_config in configured_sources.items():
-        interval_minutes = source_config.get('schedule_interval_minutes')
-        if interval_minutes:
-            job_id = f"feed_fetch_{source_name}"
-            scheduler.add_job(
-                fetch_and_process_single_feed,
-                'interval',
-                minutes=interval_minutes,
-                id=job_id,
-                name=source_name,
-                args=[source_config],
-                replace_existing=True
-            )
-            print(f"Scheduled job for {source_name} to run every {interval_minutes} minutes.")
-
-    # Scheduled Service Updates (Every 24 hours)
-    scheduler.add_job(process_microsoft_feeds, 'interval', minutes=1440, id='update_ms365', name='Microsoft 365 Feeds', replace_existing=True)
-    scheduler.add_job(process_github_feeds, 'interval', minutes=1440, id='update_github', name='GitHub Feeds', replace_existing=True)
-    scheduler.add_job(process_azure_feeds, 'interval', minutes=1440, id='update_azure', name='Azure Feeds', replace_existing=True)
-    print("Scheduled daily updates for Microsoft 365, GitHub, and Azure feeds.")
+from .scheduler_manager import scheduler, update_scheduled_jobs
 
 # Ensure SSL
 generate_self_signed_cert()

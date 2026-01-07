@@ -5,41 +5,43 @@ import threading
 import zipfile
 from datetime import datetime
 
+import pytz
 from flask import flash, jsonify, redirect, request, send_file, url_for
 
-from ..aggregator import CURRENT_JOB_STATUS, regenerate_edl_files, run_aggregator, test_feed_source
+from ..aggregator import fetch_and_process_single_feed, regenerate_edl_files, run_aggregator, test_feed_source
+from ..scheduler_manager import scheduler, update_scheduled_jobs
 from ..azure_services import process_azure_feeds
-from ..config_manager import DATA_DIR, read_config
+from ..config_manager import DATA_DIR, read_config, read_stats
 from ..db_manager import (
     add_api_blacklist_item,
     add_whitelist_item,
     clear_job_history,
     get_historical_stats,
+    get_indicator_counts_by_type,
     get_job_history,
+    get_unique_indicator_count,
     get_whitelist,
     remove_api_blacklist_item,
     remove_whitelist_item,
 )
 from ..github_services import process_github_feeds
-from ..log_manager import get_live_logs
+from ..log_manager import clear_logs, get_live_logs
 from ..microsoft_services import process_microsoft_feeds
-from ..utils import add_to_safe_list, format_timestamp, remove_from_safe_list
+from ..services.job_service import job_service
+from ..utils import add_to_safe_list, format_timestamp, remove_from_safe_list, validate_indicator
 from . import bp_api
 from .auth import api_key_required, login_required
 
 logger = logging.getLogger(__name__)
 
-# Global aggregation status
-AGGREGATION_STATUS = "idle"
 
 def aggregation_task(update_status=True):
     """
     Runs a full aggregation of all configured threat feeds.
     """
     logging.debug(f"Starting aggregation_task (update_status={update_status}).")
-    global AGGREGATION_STATUS
     if update_status:
-        AGGREGATION_STATUS = "running"
+        job_service.aggregation_status = "running"
 
     config = read_config()
     source_urls = config.get("source_urls", [])
@@ -47,23 +49,24 @@ def aggregation_task(update_status=True):
     run_aggregator(source_urls)
 
     if update_status:
-        AGGREGATION_STATUS = "completed"
+        job_service.aggregation_status = "completed"
     logging.debug("aggregation_task completed.")
+
 
 @bp_api.route('/run')
 @login_required
 def run_script():
     logging.debug("Received request to /api/run endpoint.")
-    global AGGREGATION_STATUS
-    if AGGREGATION_STATUS == "running":
+    if job_service.aggregation_status == "running":
         logging.info("Aggregation already running, returning status.")
-        return jsonify({"status": AGGREGATION_STATUS})
+        return jsonify({"status": job_service.aggregation_status})
 
-    AGGREGATION_STATUS = "running"
+    job_service.aggregation_status = "running"
     thread = threading.Thread(target=aggregation_task)
     thread.start()
     logging.info("Aggregation task started in a new thread.")
     return jsonify({"status": "running"})
+
 
 @bp_api.route('/run_single/<path:name>')
 @login_required
@@ -75,33 +78,30 @@ def run_single_feed(name):
     if not source:
         return jsonify({"status": "error", "message": "Source not found"}), 404
 
-    from ..aggregator import fetch_and_process_single_feed
     thread = threading.Thread(target=fetch_and_process_single_feed, args=(source,))
     thread.start()
 
     return jsonify({"status": "running", "message": f"Fetch started for {name}"})
 
+
 @bp_api.route('/status')
 @login_required
 def status():
     logging.debug("Received request to /api/status endpoint.")
-    return jsonify({"status": AGGREGATION_STATUS})
+    return jsonify({"status": job_service.aggregation_status})
+
 
 @bp_api.route('/status_detailed')
 @login_required
 def status_detailed():
     """Returns detailed status of currently running jobs."""
-    return jsonify(CURRENT_JOB_STATUS)
+    return jsonify(job_service.get_all_job_statuses())
+
 
 @bp_api.route('/scheduled_jobs')
 @login_required
 def get_scheduled_jobs():
     """Returns sorted list of upcoming scheduled jobs."""
-    import pytz
-
-    from ..app import scheduler
-    from ..config_manager import read_config
-
     config = read_config()
     target_tz = pytz.timezone(config.get('timezone', 'UTC'))
 
@@ -138,6 +138,7 @@ def get_scheduled_jobs():
 
     return jsonify(formatted_jobs)
 
+
 @bp_api.route('/trend_data')
 @login_required
 def trend_data():
@@ -155,6 +156,7 @@ def trend_data():
             pass
 
     return jsonify(formatted_data)
+
 
 @bp_api.route('/history')
 @login_required
@@ -181,6 +183,7 @@ def job_history():
             pass
     return jsonify(history)
 
+
 @bp_api.route('/history/clear', methods=['POST'])
 @login_required
 def clear_history_route():
@@ -192,26 +195,26 @@ def clear_history_route():
         logger.error("Failed to clear job history in DB")
         return jsonify({'status': 'error', 'message': 'Failed to clear job history.'}), 500
 
+
 @bp_api.route('/live_logs')
 @login_required
 def live_logs():
     """Returns the latest logs from memory."""
     return jsonify(get_live_logs())
 
+
 @bp_api.route('/live_logs/clear', methods=['POST'])
 @login_required
 def clear_live_logs_route():
     """Clears the live logs from memory."""
-    from ..log_manager import clear_logs
     clear_logs()
     return jsonify({'status': 'success', 'message': 'Live logs cleared.'})
+
 
 @bp_api.route('/source_stats')
 @login_required
 def source_stats_api():
     """Returns current counts and last updated times for all sources."""
-    from ..config_manager import read_config, read_stats
-    from ..db_manager import get_indicator_counts_by_type, get_unique_indicator_count
 
     stats = read_stats()
     config = read_config()
@@ -253,6 +256,7 @@ def api_regenerate_lists():
     else:
         return jsonify({'status': 'error', 'message': msg})
 
+
 @bp_api.route('/update_ms365', methods=['POST'])
 @login_required
 def api_update_ms365():
@@ -264,6 +268,7 @@ def api_update_ms365():
             return jsonify({'status': 'error', 'message': msg})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
+
 
 @bp_api.route('/update_github', methods=['POST'])
 @login_required
@@ -277,6 +282,7 @@ def api_update_github():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 
+
 @bp_api.route('/update_azure', methods=['POST'])
 @login_required
 def api_update_azure():
@@ -288,6 +294,7 @@ def api_update_azure():
             return jsonify({'status': 'error', 'message': msg})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
+
 
 @bp_api.route('/backup', methods=['GET'])
 @login_required
@@ -314,6 +321,7 @@ def backup_system():
         )
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @bp_api.route('/restore', methods=['POST'])
 @login_required
@@ -342,7 +350,6 @@ def restore_system():
             # Trigger config reload in main app logic if possible
             # Ideally we expose update_scheduled_jobs in a shared way
             # For now, simplistic reload
-            from ..app import update_scheduled_jobs
             update_scheduled_jobs()
 
             return redirect(url_for('dashboard.index'))
@@ -354,12 +361,12 @@ def restore_system():
         flash('Invalid file format. Please upload a .zip file.', 'danger')
         return redirect(url_for('dashboard.index'))
 
+
 @bp_api.route('/safe_list/add', methods=['POST'])
 @login_required
 def add_safe_list_item():
     item = request.form.get('item')
     if item:
-        from ..utils import validate_indicator
         is_valid, _ = validate_indicator(item)
         if not is_valid:
             flash(f'Error: "{item}" is not a valid IP, CIDR, or Domain/URL.', 'danger')
@@ -372,6 +379,7 @@ def add_safe_list_item():
             flash(f'Error adding to Safe List: {message}', 'danger')
     return redirect(url_for('dashboard.index'))
 
+
 @bp_api.route('/safe_list/remove', methods=['POST'])
 @login_required
 def remove_safe_list_item():
@@ -383,6 +391,7 @@ def remove_safe_list_item():
         else:
             flash(f'Error removing from Safe List: {message}', 'danger')
     return redirect(url_for('dashboard.index'))
+
 
 @bp_api.route('/test_feed', methods=['POST'])
 @login_required
@@ -414,7 +423,9 @@ def api_test_feed():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 
+
 # --- SOAR Integration Endpoints ---
+
 
 @bp_api.route('/indicators', methods=['POST'])
 @api_key_required
@@ -434,7 +445,7 @@ def add_indicator():
         if not data:
             return jsonify({'status': 'error', 'message': 'No data provided'}), 400
 
-        action_type = data.get('type') # whitelist or blacklist
+        action_type = data.get('type')  # whitelist or blacklist
         value = data.get('value')
         comment = data.get('comment', 'Added via API')
         item_type = data.get('item_type', 'ip')
@@ -443,7 +454,6 @@ def add_indicator():
             return jsonify({'status': 'error', 'message': 'Missing value or type'}), 400
 
         # Validation
-        from ..utils import validate_indicator
         is_valid, _ = validate_indicator(value)
         if not is_valid:
             return jsonify({'status': 'error', 'message': f'"{value}" is not a valid IP, CIDR, or Domain/URL'}), 400
@@ -477,6 +487,7 @@ def add_indicator():
         logger.error(f"API Error adding indicator: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+
 def _handle_api_indicator_removal(value, type_hint):
     """Helper to perform the actual removal from DB."""
     deleted = False
@@ -498,6 +509,7 @@ def _handle_api_indicator_removal(value, type_hint):
             msgs.append("Removed from Whitelist")
 
     return deleted, msgs
+
 
 @bp_api.route('/indicators', methods=['DELETE'])
 @api_key_required

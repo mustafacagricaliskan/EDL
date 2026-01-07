@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.1] - 2026-01-07
+
+### Refactored
+- **AI-First Architecture:** Extensive codebase refactoring to align with AI-first software engineering principles, improving maintainability and machine readability.
+- **Global State Elimination:** Replaced brittle global state variables with a thread-safe `JobService` singleton, improving concurrency and debuggability.
+- **Dependency Management:** Flattened nested imports and resolved circular dependencies between `app.py` and `api.py` by introducing a dedicated `scheduler_manager` module.
+- **Logging Standardization:** Replaced all inconsistent `print()` statements with structured `logging` calls for better observability.
+
 ## [1.9.1] - 2025-12-28
 
 ### Added

@@ -44,8 +44,7 @@ def index():
 
     # Scheduler access
     import pytz
-
-    from ..app import scheduler
+    from ..scheduler_manager import scheduler
 
     target_tz = pytz.timezone(config.get('timezone', 'UTC'))
     scheduled_jobs = scheduler.get_jobs()

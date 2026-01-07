@@ -5,10 +5,11 @@ import time
 from datetime import UTC, datetime
 
 from .config_manager import DATA_DIR, read_config, read_stats, write_stats
-from .data_collector import fetch_data_from_url_async
-from .db_manager import delete_whitelisted_indicators as db_delete_whitelisted_indicators
+from .data_collector import fetch_data_from_url_async, get_async_session
 from .db_manager import (
+    delete_whitelisted_indicators as db_delete_whitelisted_indicators,
     get_all_indicators,
+    get_all_indicators_iter,
     get_api_blacklist_items,
     get_whitelist,
     log_job_end,
@@ -19,27 +20,14 @@ from .db_manager import (
     upsert_indicators_bulk,
 )
 from .geoip_manager import get_country_code
+from .output_formatter import format_for_fortinet, format_for_palo_alto, format_for_url_list
 from .parsers import get_parser
+from .services.job_service import job_service
 from .utils import is_whitelisted
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Global in-memory status tracker
-CURRENT_JOB_STATUS = {}
-
-def update_job_status(source_name, status, details=None):
-    """Updates the in-memory status of a job."""
-    CURRENT_JOB_STATUS[source_name] = {
-        "status": status,
-        "details": details,
-        "timestamp": datetime.now(UTC).isoformat()
-    }
-
-def clear_job_status(source_name):
-    """Removes a job from the in-memory status tracker."""
-    if source_name in CURRENT_JOB_STATUS:
-        del CURRENT_JOB_STATUS[source_name]
 
 def _cleanup_whitelisted_items_from_db():
     whitelist_db_items = get_whitelist()
@@ -63,12 +51,12 @@ def _cleanup_whitelisted_items_from_db():
             chunk = indicators_to_delete[i:i + chunk_size]
             db_delete_whitelisted_indicators(chunk)
 
+
 def regenerate_edl_files():
     """
     Optimized: Regenerates EDL files using an iterator to handle millions of records with low memory.
     """
     logger.info("Regenerating EDL files from database...")
-    from .db_manager import get_all_indicators_iter
     try:
         # Instead of loading everything to a dict, we'll process in chunks or stream if possible.
         # But our formatters currently expect a dict. Let's adapt them to be more memory efficient.
@@ -97,8 +85,6 @@ def regenerate_edl_files():
             else:
                 indicators_data[ind]['risk_score'] = 100
 
-        from .output_formatter import format_for_fortinet, format_for_palo_alto, format_for_url_list
-
         palo_alto_output = format_for_palo_alto(indicators_data)
         with open(os.path.join(DATA_DIR, "palo_alto_edl.txt"), "w") as f:
             f.write(palo_alto_output)
@@ -116,6 +102,7 @@ def regenerate_edl_files():
     except Exception as e:
         logger.error(f"Error regenerating EDL files: {e}")
         return False, str(e)
+
 
 class FeedAggregator:
     """
@@ -135,8 +122,6 @@ class FeedAggregator:
 
         duration = time.time() - start_time
         return raw_data, [], duration
-
-    # ... (parse_data, filter_whitelist, enrich_data, save_batch methods remain unchanged)
 
     def parse_data(self, raw_data, source_config):
         """
@@ -175,7 +160,7 @@ class FeedAggregator:
             enriched_data.append((item, country, item_type))
 
             if (i + 1) % 10000 == 0:
-                update_job_status(source_name, "Enriching", f"Enriched {i + 1}/{total} items...")
+                job_service.update_job_status(source_name, "Enriching", f"Enriched {i + 1}/{total} items...")
         return enriched_data
 
     def save_batch(self, items, source_name):
@@ -186,7 +171,7 @@ class FeedAggregator:
         total_batches = (len(items) + batch_size - 1) // batch_size
 
         logger.info(f"[{source_name}] Starting DB upsert for {len(items)} items in {total_batches} batches.")
-        update_job_status(source_name, "Saving", f"Writing {len(items)} items (0/{total_batches} batches)...")
+        job_service.update_job_status(source_name, "Saving", f"Writing {len(items)} items (0/{total_batches} batches)...")
 
         for i in range(0, len(items), batch_size):
             batch = items[i:i + batch_size]
@@ -198,7 +183,7 @@ class FeedAggregator:
                     upsert_indicators_bulk(batch, source_name=source_name, conn=self.db_conn)
                     msg = f"Written batch {current_batch_num}/{total_batches} ({len(batch)} items)"
                     logger.info(f"[{source_name}] {msg}")
-                    update_job_status(source_name, "Saving", msg)
+                    job_service.update_job_status(source_name, "Saving", msg)
                     break
                 except Exception as e:
                     if attempt < max_retries - 1:
@@ -213,21 +198,21 @@ class FeedAggregator:
 
         # Log Start (DB Op - Run in Executor)
         job_id = await loop.run_in_executor(None, log_job_start, name, self.db_conn)
-        update_job_status(name, "Fetching", f"Downloading from {source_config['url']}")
+        job_service.update_job_status(name, "Fetching", f"Downloading from {source_config['url']}")
 
         try:
             raw_data, items, duration = await self.fetch_data(source_config, session=session)
 
             if raw_data:
                 if not items and source_config.get("format") != "taxii":
-                    update_job_status(name, "Parsing", "Parsing data format...")
+                    job_service.update_job_status(name, "Parsing", "Parsing data format...")
                     items = self.parse_data(raw_data, source_config)
 
-                update_job_status(name, "Filtering", f"Filtering whitelist ({len(items)} items)...")
+                job_service.update_job_status(name, "Filtering", f"Filtering whitelist ({len(items)} items)...")
                 # Whitelist Check (DB Op - Run in Executor)
                 filtered_items = await loop.run_in_executor(None, self.filter_whitelist, items)
 
-                update_job_status(name, "Enriching", f"Enriching {len(filtered_items)} items...")
+                job_service.update_job_status(name, "Enriching", f"Enriching {len(filtered_items)} items...")
                 enriched_items = self.enrich_data(filtered_items, name)
 
                 if enriched_items:
@@ -237,7 +222,7 @@ class FeedAggregator:
                 count = len(enriched_items)
 
                 if recalculate:
-                    update_job_status(name, "Scoring", "Recalculating risk scores...")
+                    job_service.update_job_status(name, "Scoring", "Recalculating risk scores...")
                     try:
                         full_config = read_config()
                         confidence_map = {s['name']: s.get('confidence', 50) for s in full_config.get('source_urls', [])}
@@ -247,7 +232,7 @@ class FeedAggregator:
                     await loop.run_in_executor(None, recalculate_scores, confidence_map, self.db_conn)
 
                 await loop.run_in_executor(None, log_job_end, job_id, "success", count, f"Fetch time: {duration:.2f}s", self.db_conn)
-                update_job_status(name, "Completed", f"Processed {count} items.")
+                job_service.update_job_status(name, "Completed", f"Processed {count} items.")
 
                 return {
                     "name": name,
@@ -257,18 +242,18 @@ class FeedAggregator:
                 }
             else:
                 await loop.run_in_executor(None, log_job_end, job_id, "warning", 0, "No data fetched", self.db_conn)
-                update_job_status(name, "Completed", "No data fetched.")
+                job_service.update_job_status(name, "Completed", "No data fetched.")
                 return {"name": name, "count": 0, "fetch_time": f"{duration:.2f} seconds", "last_updated": datetime.now(UTC).isoformat()}
 
         except Exception as e:
             logger.error(f"Error processing {name}: {e}")
             await loop.run_in_executor(None, log_job_end, job_id, "failure", 0, str(e), self.db_conn)
-            update_job_status(name, "Failed", str(e))
+            job_service.update_job_status(name, "Failed", str(e))
             raise
+
 
 async def aggregate_sources_async(source_urls):
     aggregator = FeedAggregator()
-    from .data_collector import get_async_session
 
     # Create a single session for all requests
     async with await get_async_session() as session:
@@ -286,6 +271,7 @@ async def aggregate_sources_async(source_urls):
 
         return results
 
+
 def run_aggregator(source_urls):
     """
     Main entry point for aggregation (Sync wrapper around Async).
@@ -299,7 +285,7 @@ def run_aggregator(source_urls):
 
     all_url_counts = {}
     current_stats = read_stats()
-    CURRENT_JOB_STATUS.clear()
+    job_service.clear_all_job_statuses()
 
     # --- Run Async Event Loop ---
     try:
@@ -330,12 +316,14 @@ def run_aggregator(source_urls):
     regenerate_edl_files()
     return {"url_counts": all_url_counts, "processed_data": []}
 
+
 def aggregate_single_source(source_config, recalculate=True):
     """
     Sync wrapper for single source (Backward compatibility).
     """
     aggregator = FeedAggregator()
     return asyncio.run(aggregator.process_source(source_config, recalculate))
+
 
 def fetch_and_process_single_feed(source_config):
     """
@@ -365,16 +353,15 @@ def fetch_and_process_single_feed(source_config):
     except Exception as e:
         logger.error(f"Scheduled fetch failed for {name}: {e}")
 
-# Re-alias main to run_aggregator for app.py compatibility if needed,
-# though we changed app.py to import 'run_aggregator' from 'aggregator' via 'main as run_aggregator'
-# so keeping function name 'run_aggregator' but aliasing it as main is safer.
+
+# Re-alias main to run_aggregator
 main = run_aggregator
+
 
 def test_feed_source(source_config):
     """
     Tests a feed source using the FeedAggregator logic without saving.
     """
-    name = source_config.get("name", "Test Source")
     aggregator = FeedAggregator()
 
     async def _test():

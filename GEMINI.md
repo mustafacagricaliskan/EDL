@@ -15,6 +15,21 @@ This project is a web-based Threat Feed Aggregator built with Flask. Its purpose
 *   **Output Formatting:** Generates downloadable External Dynamic Lists (EDLs) for Palo Alto Networks and Fortinet.
 *   **User Authentication:** Basic login functionality with optional LDAP integration.
 
+## Recent Major Updates (v1.11.0 - Security & Core Enhancements)
+
+### 1. Advanced Authentication & Security
+*   **Multi-Factor Authentication (MFA):** Implemented TOTP-based 2FA (compatible with Google/Microsoft Authenticator) for local user accounts. Features a setup wizard, QR code generation, and a secure secondary verification screen.
+*   **Authenticated Threat Feeds:** Added support for HTTP Basic Authentication (Username/Password) when fetching data from premium or restricted threat feed sources.
+*   **Production-Ready SSL & WSGI:** Switched the Docker entrypoint to use **Gunicorn** with 4 workers for high concurrency. Added a `prestart.py` script to automatically generate self-signed SSL certificates and initialize the database before the server starts.
+
+### 2. Generic EDL & Data Flexibility
+*   **Generic EDL Builder:** Introduced a new API endpoint (`/api/edl/generic`) and a dashboard GUI tool. This allows users to generate custom External Dynamic Lists by selecting specific indicator types (IP, Domain, URL) and output formats (Text, CSV, JSON) on the fly.
+*   **Nested JSON Parsing:** Enhanced the JSON parser to support dot notation (e.g., `data.attributes.ip_address`), enabling the extraction of indicators from complex, nested JSON structures.
+
+### 3. Architecture & Reliability
+*   **Server-Side Sessions:** Migrated session management to `Flask-Session` (filesystem-based). This solves session persistence issues in multi-worker Gunicorn environments, ensuring users stay logged in while navigating between different worker processes.
+*   **Unified Source Management:** Refactored the frontend logic (`source_manager.js`) to provide a consistent "Add/Edit Source" experience across both the Dashboard and System Settings pages, eliminating code duplication.
+
 ## Recent Major Updates (v1.5 - Enterprise Security Features)
 
 ### 1. Advanced API Management (Multi-Client & IP Restriction)

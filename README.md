@@ -1,7 +1,7 @@
 # 🛡️ Threat Feed Aggregator
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.9.1-blue?style=for-the-badge" alt="Version 1.9.1">
+  <img src="https://img.shields.io/badge/Version-1.11.0-blue?style=for-the-badge" alt="Version 1.11.0">
   <img src="https://img.shields.io/badge/Python-3.13+-green?style=for-the-badge&logo=python" alt="Python 3.13+">
   <img src="https://img.shields.io/badge/Flask-3.0-lightgrey?style=for-the-badge&logo=flask" alt="Flask 3.0">
   <img src="https://img.shields.io/badge/Docker-Ready-cyan?style=for-the-badge&logo=docker" alt="Docker Ready">
@@ -23,6 +23,8 @@
 ## ✨ Key Features
 
 ### 🧠 Intelligence Engine
+- **Generic EDL Builder:** Generate custom lists on-the-fly with selectable types (IP/Domain) and formats (Text/CSV/JSON) via GUI or API.
+- **Authenticated Feeds:** Fetch data from premium sources requiring HTTP Basic Authentication.
 - **CIDR Aggregation:** Automatically merges contiguous IP addresses and overlapping subnets into optimal CIDR blocks.
 - **Smart Scoring:** Assigns risk scores (0-100) based on source confidence and indicator overlap.
 - **Auto-Retention:** Granular, per-source aging policies to keep your blocklists fresh and relevant.
@@ -33,6 +35,7 @@
 - **Visual Distribution:** Interactive world map visualizing the geographical origin of threat indicators.
 
 ### 🏢 Enterprise Readiness
+- **Multi-Factor Auth (MFA):** TOTP-based 2FA (Google/Microsoft Authenticator) for local accounts.
 - **Advanced RBAC:** Role-Based Access Control with custom permission profiles (Read/Write/None).
 - **LDAP/AD Integration:** Native Active Directory support with Group-to-Profile mapping.
 - **Secure Infrastructure:** Support for System-wide Proxies, custom Root CAs, and high-security SSL configurations.
@@ -88,7 +91,7 @@ The platform is designed to be "Config-via-GUI" first. Navigate to **System Sett
 - **Security:** SSL Certificate management and System Backups.
 
 > [!IMPORTANT]  
-> **Security Fix (v1.9.0):** This version includes critical patches for Gunicorn (CVE-2024-1135) and Cryptography (CVE-2024-9143).
+> **Security Update (v1.11.0):** Now runs on **Gunicorn** by default for production-grade security and concurrency.
 
 ---
 
@@ -107,6 +110,8 @@ Our CI pipeline automatically validates every commit on **GitHub Actions** using
 
 ## 🏗 Architecture (Clean Code)
 
+- **Production Server:** **Gunicorn** (WSGI) with 4 workers and automated SSL certificate generation.
+- **Session Management:** Server-side filesystem sessions (`Flask-Session`) for reliable multi-worker persistence.
 - **Asynchronous Core:** Uses `asyncio` and `aiohttp` for high-speed concurrent feed fetching.
 - **Repository Pattern:** Database logic is decoupled into domain-specific repositories.
 - **Service Layer:** Business logic is isolated from web routes for modularity and testability.

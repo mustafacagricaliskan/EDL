@@ -17,7 +17,10 @@ from .repositories.user_repo import (
     get_admin_password_hash,
     update_admin_profile,
     update_local_user_password,
-    verify_local_user
+    verify_local_user,
+    get_user_mfa_secret,
+    update_user_mfa_secret,
+    is_mfa_enabled
 )
 from .repositories.indicator_repo import (
     get_country_stats,

@@ -115,6 +115,32 @@ def local_user_exists(username, conn=None):
         cursor = db.execute("SELECT 1 FROM users WHERE username = ?", (username,))
         return cursor.fetchone() is not None
 
+# --- MFA Functions ---
+
+def get_user_mfa_secret(username, conn=None):
+    """Retrieves the MFA secret for a user."""
+    with db_transaction(conn) as db:
+        cursor = db.execute("SELECT mfa_secret FROM users WHERE username = ?", (username,))
+        result = cursor.fetchone()
+        return result['mfa_secret'] if result else None
+
+def update_user_mfa_secret(username, secret, conn=None):
+    """Updates (enables) or clears (disables) the MFA secret."""
+    with DB_WRITE_LOCK:
+        with db_transaction(conn) as db:
+            try:
+                db.execute('UPDATE users SET mfa_secret = ? WHERE username = ?', (secret, username))
+                db.commit()
+                return True, "MFA updated."
+            except Exception as e:
+                logger.error(f"Error updating MFA secret: {e}")
+                return False, str(e)
+
+def is_mfa_enabled(username, conn=None):
+    """Checks if MFA is enabled for the user."""
+    secret = get_user_mfa_secret(username, conn)
+    return secret is not None and len(secret) > 0
+
 # --- Admin Profile Management ---
 
 def get_admin_profiles(conn=None):

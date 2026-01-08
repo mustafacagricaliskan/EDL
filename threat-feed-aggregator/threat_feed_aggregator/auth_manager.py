@@ -1,11 +1,44 @@
 import logging
 import ssl
+import pyotp
+import qrcode
+import io
+import base64
 
 from ldap3 import ALL, Connection, Server, Tls
 
 from .db_manager import get_profile_by_ldap_groups, get_user_permissions, local_user_exists, verify_local_user
 
 logger = logging.getLogger(__name__)
+
+# --- MFA Helpers ---
+
+def generate_totp_secret():
+    """Generates a random base32 secret string."""
+    return pyotp.random_base32()
+
+def generate_qr_code(username, secret, issuer_name="Threat Feed Aggregator"):
+    """Generates a QR code for the TOTP secret."""
+    totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name=issuer_name)
+    
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(totp_uri)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Save to BytesIO
+    buffered = io.BytesIO()
+    img.save(buffered)
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+def verify_totp(secret, code):
+    """Verifies a TOTP code against the secret."""
+    if not secret: return False
+    totp = pyotp.TOTP(secret)
+    return totp.verify(code)
+
+# --- End MFA Helpers ---
 
 from functools import wraps
 

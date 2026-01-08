@@ -142,6 +142,31 @@
                             <a href="{{ url_for('dashboard.download_file', filename='palo_alto_edl.txt') }}" class="btn btn-outline-dark text-start p-2 small d-flex justify-content-between"><span>Palo Alto Networks</span><i class="fas fa-download"></i></a>
                             <a href="{{ url_for('dashboard.download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-dark text-start p-2 small d-flex justify-content-between"><span>Fortinet FortiGate</span><i class="fas fa-download"></i></a>
                         </div>
+                        <h6 class="form-label-custom small fw-bold mb-2">Generic EDL Builder</h6>
+                        <div class="bg-light p-2 rounded border mb-3">
+                            <div class="mb-2">
+                                <label class="small text-muted mb-1">Select Types</label><br>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="checkbox" class="btn-check" id="type_ip" checked autocomplete="off">
+                                    <label class="btn btn-outline-primary btn-xs" for="type_ip">IP/CIDR</label>
+                                    <input type="checkbox" class="btn-check" id="type_domain" autocomplete="off">
+                                    <label class="btn btn-outline-primary btn-xs" for="type_domain">Domain</label>
+                                    <input type="checkbox" class="btn-check" id="type_url" autocomplete="off">
+                                    <label class="btn btn-outline-primary btn-xs" for="type_url">URL</label>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted mb-1">Format</label>
+                                <select id="edl_format" class="form-select form-select-sm">
+                                    <option value="text">Plain Text</option>
+                                    <option value="csv">CSV</option>
+                                    <option value="json">JSON</option>
+                                </select>
+                            </div>
+                            <button onclick="copyGenericEDL()" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-copy me-1"></i> Copy API Link
+                            </button>
+                        </div>
                         <h6 class="form-label-custom small fw-bold mb-2">Service Whitelists</h6>
                         <div class="d-flex flex-column gap-2">
                             <!-- MS365 -->

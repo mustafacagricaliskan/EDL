@@ -5,6 +5,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask
 from flask_wtf.csrf import CSRFProtect
+from flask_session import Session
 
 from .aggregator import fetch_and_process_single_feed
 from .azure_services import process_azure_feeds
@@ -56,9 +57,17 @@ def from_json_filter(value):
 # CSRF Protection
 csrf = CSRFProtect(app)
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
-app.config['SESSION_COOKIE_SECURE'] = False
-app.config['SESSION_COOKIE_HTTPONLY'] = False
+
+# Session Configuration (Filesystem for Multi-Worker Support)
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = os.path.join(DATA_DIR, 'flask_session')
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_COOKIE_SECURE'] = True # Secure since we use SSL
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+Session(app)
 
 # Data Directory
 if not os.path.exists(DATA_DIR):

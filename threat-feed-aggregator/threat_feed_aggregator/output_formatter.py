@@ -1,4 +1,47 @@
+import json
+import csv
+from io import StringIO
 from .utils import aggregate_ips
+
+
+def format_generic(indicator_dict, include_types=None, output_format='text', delimiter='\n'):
+    """
+    Generates a generic output for indicators.
+    
+    Args:
+        indicator_dict (dict): Dictionary of indicators.
+        include_types (list): List of types to include (e.g. ['ip', 'domain']). If None, includes all.
+        output_format (str): 'text', 'csv', or 'json'.
+        delimiter (str): Delimiter for 'text' format (default newline).
+        
+    Returns:
+        str: Formatted output string.
+    """
+    items = []
+    for indicator, details in indicator_dict.items():
+        if include_types and details.get('type') not in include_types:
+            continue
+        items.append({
+            'indicator': indicator,
+            'type': details.get('type'),
+            'risk_score': details.get('risk_score'),
+            'country': details.get('country')
+        })
+
+    if output_format == 'json':
+        return json.dumps(items, indent=2)
+    
+    elif output_format == 'csv':
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['indicator', 'type', 'risk_score', 'country'])
+        for item in items:
+            writer.writerow([item['indicator'], item['type'], item['risk_score'], item['country']])
+        return output.getvalue()
+        
+    else: # text
+        # Just return the indicators
+        return delimiter.join([item['indicator'] for item in items])
 
 
 def format_for_palo_alto(indicator_dict):

@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.11.0] - 2026-01-08
+
+### Added
+- **Multi-Factor Authentication (MFA):** Implemented TOTP-based 2FA (Google/Microsoft Authenticator) for local accounts. Includes setup wizard, QR code generation, and a secondary verification screen.
+- **Authenticated Feeds:** Added support for HTTP Basic Authentication (Username/Password) when fetching threat feeds.
+- **Generic EDL Builder:** New API endpoint (`/api/edl/generic`) and GUI tool to generate custom External Dynamic Lists (EDL) with selectable types (IP/Domain/URL) and formats (Text/CSV/JSON).
+- **Session Persistence:** Switched to server-side filesystem sessions (`Flask-Session`) to support multi-worker deployments (Gunicorn) without session loss.
+- **Nested JSON Parsing:** Enhanced JSON parser to support dot notation (e.g., `attributes.ip_address`) for extracting nested keys.
+
+### Improved
+- **Production Readiness:** Docker entrypoint now defaults to **Gunicorn** (WSGI) instead of the Flask development server for better performance, security, and concurrency (4 workers).
+- **GUI UX:** Consolidated source management logic into a shared `source_manager.js`, ensuring consistent behavior between Dashboard and System pages. Moved MFA settings to the "Authentication" tab for better organization.
+- **SSL Automation:** Added a pre-start check (`prestart.py`) to automatically generate self-signed SSL certificates if missing, ensuring Gunicorn starts smoothly.
+
+### Fixed
+- **Dependency Issues:** Added missing dependencies (`pytz`, `Pillow`, `Flask-Session`, `pyotp`, `qrcode`) to `requirements.txt` to fix runtime errors.
+- **CSRF Protection:** Fixed "Bad Request" errors on the 2FA verification page by injecting the missing CSRF token.
+- **Docker Volume Config:** Updated `docker-compose.yml` to ensure data persistence works correctly across rebuilds.
+
 ## [1.10.1] - 2026-01-07
 
 ### Refactored

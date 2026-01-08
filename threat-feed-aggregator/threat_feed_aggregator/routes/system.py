@@ -24,6 +24,7 @@ from ..db_manager import (
     set_admin_password,
     update_admin_profile,
     update_local_user_password,
+    is_mfa_enabled
 )
 from . import bp_system
 from .auth import login_required
@@ -36,7 +37,8 @@ def index():
     users = get_all_users()
     profiles = get_admin_profiles()
     ldap_mappings = get_ldap_group_mappings()
-    return render_template('system.html', config=config, users=users, profiles=profiles, ldap_mappings=ldap_mappings)
+    user_mfa_status = is_mfa_enabled(session.get('username'))
+    return render_template('system.html', config=config, users=users, profiles=profiles, ldap_mappings=ldap_mappings, mfa_enabled=user_mfa_status)
 
 @bp_system.route('/ldap/mappings/add', methods=['POST'])
 @login_required
@@ -181,6 +183,8 @@ def add_source():
     url = request.form.get('url')
     data_format = request.form.get('format', 'text')
     key_or_column = request.form.get('key_or_column')
+    auth_user = request.form.get('auth_user')
+    auth_pass = request.form.get('auth_pass')
     schedule_interval_minutes = request.form.get('schedule_interval_minutes', type=int)
     confidence = request.form.get('confidence', default=50, type=int)
     retention_days = request.form.get('retention_days', type=int)
@@ -194,6 +198,8 @@ def add_source():
             "confidence": confidence
         }
         if key_or_column: new_source["key_or_column"] = key_or_column
+        if auth_user: new_source["auth_user"] = auth_user
+        if auth_pass: new_source["auth_pass"] = auth_pass
         if schedule_interval_minutes: new_source["schedule_interval_minutes"] = schedule_interval_minutes
         if retention_days: new_source["retention_days"] = retention_days
 
@@ -213,6 +219,8 @@ def update_source(index):
     url = request.form.get('url')
     data_format = request.form.get('format', 'text')
     key_or_column = request.form.get('key_or_column')
+    auth_user = request.form.get('auth_user')
+    auth_pass = request.form.get('auth_pass')
     schedule_interval_minutes = request.form.get('schedule_interval_minutes', type=int)
     confidence = request.form.get('confidence', default=50, type=int)
     retention_days = request.form.get('retention_days', type=int)
@@ -227,6 +235,8 @@ def update_source(index):
                 "confidence": confidence
             }
             if key_or_column: updated_source["key_or_column"] = key_or_column
+            if auth_user: updated_source["auth_user"] = auth_user
+            if auth_pass: updated_source["auth_pass"] = auth_pass
             if schedule_interval_minutes: updated_source["schedule_interval_minutes"] = schedule_interval_minutes
             if retention_days: updated_source["retention_days"] = retention_days
 

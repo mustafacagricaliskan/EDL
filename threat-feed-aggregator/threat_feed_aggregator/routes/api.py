@@ -6,7 +6,7 @@ import zipfile
 from datetime import datetime
 
 import pytz
-from flask import flash, jsonify, redirect, request, send_file, url_for
+from flask import flash, jsonify, redirect, request, send_file, url_for, Response
 
 from ..aggregator import fetch_and_process_single_feed, regenerate_edl_files, run_aggregator, test_feed_source
 from ..scheduler_manager import scheduler, update_scheduled_jobs
@@ -23,16 +23,56 @@ from ..db_manager import (
     get_whitelist,
     remove_api_blacklist_item,
     remove_whitelist_item,
+    get_all_indicators_iter,
 )
 from ..github_services import process_github_feeds
 from ..log_manager import clear_logs, get_live_logs
 from ..microsoft_services import process_microsoft_feeds
+from ..output_formatter import format_generic
 from ..services.job_service import job_service
 from ..utils import add_to_safe_list, format_timestamp, remove_from_safe_list, validate_indicator
 from . import bp_api
 from .auth import api_key_required, login_required
 
 logger = logging.getLogger(__name__)
+
+
+@bp_api.route('/edl/generic')
+@api_key_required
+def get_generic_edl():
+    """
+    Returns a generic EDL.
+    Params:
+    - types: comma separated (ip,domain,url,cidr)
+    - format: text, csv, json
+    - delimiter: for text format (default newline)
+    """
+    types_str = request.args.get('types')
+    include_types = types_str.split(',') if types_str else None
+    output_format = request.args.get('format', 'text')
+    delimiter = request.args.get('delimiter', '\n')
+    
+    # Validation
+    if output_format not in ['text', 'csv', 'json']:
+        return jsonify({'error': 'Invalid format'}), 400
+
+    # Fetch Data
+    indicators_data = {row['indicator']: {
+            'last_seen': row['last_seen'],
+            'country': row['country'],
+            'type': row['type'],
+            'risk_score': row['risk_score']
+        } for row in get_all_indicators_iter()}
+        
+    output = format_generic(indicators_data, include_types, output_format, delimiter)
+    
+    mimetype = 'text/plain'
+    if output_format == 'json':
+        mimetype = 'application/json'
+    elif output_format == 'csv':
+        mimetype = 'text/csv'
+
+    return Response(output, mimetype=mimetype)
 
 
 def aggregation_task(update_status=True):

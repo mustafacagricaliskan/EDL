@@ -231,6 +231,27 @@
                 </div>
                 <div class="col-md-5">
                     <div class="card settings-card shadow-sm mb-4">
+                        <div class="card-header bg-white fw-bold py-3 border-0"><i class="fas fa-user-shield me-2 text-success"></i> My Account Security</div>
+                        <div class="card-body pt-0">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h6 class="fw-bold mb-1">Two-Factor Authentication</h6>
+                                    <p class="text-muted small mb-0">Secure your account with TOTP (Google Auth).</p>
+                                </div>
+                                <div id="mfaStatusContainer">
+                                    {% if mfa_enabled %}
+                                        <span class="badge bg-success me-2"><i class="fas fa-check-circle"></i> Active</span>
+                                        <button class="btn btn-outline-danger btn-sm" onclick="disableMfa()">Disable</button>
+                                    {% else %}
+                                        <span class="badge bg-secondary me-2">Inactive</span>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="startMfaSetup()">Enable</button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card settings-card shadow-sm mb-4">
                         <div class="card-header bg-white fw-bold py-3 border-0 d-flex justify-content-between align-items-center">
                             <div><i class="fas fa-id-card-alt me-2 text-primary"></i> Admin Profiles</div>
                             <button class="btn btn-sm btn-outline-primary" onclick="showProfileModal()" {{ 'disabled' if sys_perm == 'r' }}><i class="fas fa-plus"></i></button>
@@ -396,49 +417,68 @@
         document.querySelectorAll('#settingsTabs a').forEach(link => { link.addEventListener('shown.bs.tab', e => localStorage.setItem('activeTab', e.target.getAttribute('href'))); });
     });
 
-    function showAddSourceModal() {
-        Swal.fire({
-            title: 'Add New Threat Source',
-            html: `
-                <div class="text-start mb-2"><label class="small fw-bold">Name</label><input type="text" id="sName" class="form-control" placeholder="e.g. AlienVault"></div>
-                <div class="text-start mb-2"><label class="small fw-bold">URL</label><input type="text" id="sUrl" class="form-control" placeholder="https://..."></div>
-                <div class="row g-2 mb-2">
-                    <div class="col-6"><label class="small fw-bold">Format</label><select id="sFormat" class="form-select"><option value="text">Text</option><option value="json">JSON</option><option value="csv">CSV</option></select></div>
-                    <div class="col-6"><label class="small fw-bold">Interval (Min)</label><input type="number" id="sInterval" class="form-control" value="60"></div>
-                </div>
-                <div class="text-start"><label class="small fw-bold">Confidence (0-100)</label><input type="number" id="sConf" class="form-control" value="50" min="0" max="100"></div>
-            `,
-            showCancelButton: true, confirmButtonText: 'Add',
-            preConfirm: () => {
-                const name = document.getElementById('sName').value;
-                const url = document.getElementById('sUrl').value;
-                if (!name || !url) Swal.showValidationMessage(`Required fields missing`);
-                return { name, url, format: document.getElementById('sFormat').value, schedule_interval_minutes: document.getElementById('sInterval').value, confidence: document.getElementById('sConf').value };
-            }
-        }).then(res => { if (res.isConfirmed) submitForm('{{ url_for("system.add_source") }}', res.value); });
+    // --- MFA Functions ---
+    function startMfaSetup() {
+        Swal.fire({ title: 'Generating Setup...', didOpen: () => { Swal.showLoading(); } });
+        fetch('/mfa/setup').then(r => r.json()).then(data => {
+            Swal.fire({
+                title: 'Setup Authenticator',
+                html: `
+                    <div class="text-center mb-3">
+                        <img src="data:image/png;base64,${data.qr_code}" style="width: 200px; height: 200px; border: 1px solid #ddd; padding: 5px;">
+                    </div>
+                    <p class="small text-muted">1. Scan this QR code with your Authenticator App.<br>2. Enter the 6-digit code below.</p>
+                    <input type="text" id="mfaCode" class="form-control text-center fw-bold letter-spacing-2" placeholder="000 000" maxlength="6" style="font-size: 1.2rem;">
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Verify & Enable',
+                preConfirm: () => {
+                    const code = document.getElementById('mfaCode').value;
+                    if (!code) Swal.showValidationMessage('Please enter the code');
+                    return { secret: data.secret, code: code };
+                }
+            }).then(result => {
+                if (result.isConfirmed) verifyAndEnableMfa(result.value);
+            });
+        });
     }
 
-    function showEditSourceModal(index, source) {
-        Swal.fire({
-            title: `Edit Source: ${source.name}`,
-            html: `
-                <div class="text-start mb-2"><label class="small fw-bold">Name</label><input type="text" id="eName" class="form-control" value="${source.name}"></div>
-                <div class="text-start mb-2"><label class="small fw-bold">URL</label><input type="text" id="eUrl" class="form-control" value="${source.url}"></div>
-                <div class="row g-2 mb-2">
-                    <div class="col-6"><label class="small fw-bold">Format</label><select id="eFormat" class="form-select"><option value="text" ${source.format==='text'?'selected':''}>Text</option><option value="json" ${source.format==='json'?'selected':''}>JSON</option><option value="csv" ${source.format==='csv'?'selected':''}>CSV</option></select></div>
-                    <div class="col-6"><label class="small fw-bold">Interval</label><input type="number" id="eInterval" class="form-control" value="${source.schedule_interval_minutes}"></div>
-                </div>
-                <div class="text-start"><label class="small fw-bold">Confidence</label><input type="number" id="eConf" class="form-control" value="${source.confidence || 50}"></div>
-            `,
-            showCancelButton: true, confirmButtonText: 'Save Changes',
-            preConfirm: () => {
-                const name = document.getElementById('eName').value;
-                const url = document.getElementById('eUrl').value;
-                if (!name || !url) Swal.showValidationMessage(`Required`);
-                return { name, url, format: document.getElementById('eFormat').value, schedule_interval_minutes: document.getElementById('eInterval').value, confidence: document.getElementById('eConf').value };
+    function verifyAndEnableMfa(data) {
+        fetch('/mfa/enable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+            body: JSON.stringify(data)
+        }).then(r => r.json()).then(d => {
+            if (d.status === 'success') {
+                Swal.fire('Success', 'Two-Factor Authentication is now enabled.', 'success').then(() => location.reload());
+            } else {
+                Swal.fire('Error', d.message, 'error');
             }
-        }).then(res => { if (res.isConfirmed) submitForm(`/system/update_source/${index}`, res.value); });
+        });
     }
+
+    function disableMfa() {
+        Swal.fire({
+            title: 'Disable MFA?',
+            text: 'Your account will be less secure.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, Disable',
+            confirmButtonColor: '#d33'
+        }).then(result => {
+            if (result.isConfirmed) {
+                fetch('/mfa/disable', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+                }).then(r => r.json()).then(d => {
+                    Swal.fire('Disabled', d.message, 'success').then(() => location.reload());
+                });
+            }
+        });
+    }
+    // --- End MFA Functions ---
+
+    // showAddSourceModal & showEditSourceModal are now provided by static/js/source_manager.js
 
     function showAddLdapMappingModal() {
         const profiles = {{ profiles|tojson }};
@@ -487,14 +527,6 @@
         Swal.fire({ title: `Reset ${u}`, input: 'password', showCancelButton: true }).then(res => { if (res.isConfirmed) submitForm('{{ url_for("system.change_user_password") }}', { username: u, password: res.value }); });
     }
 
-    function submitForm(action, data) {
-        const form = document.createElement('form'); form.method = 'POST'; form.action = action;
-        for (const k in data) { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = data[k]; form.appendChild(i); }
-        const csrf = document.createElement('input'); csrf.type = 'hidden'; csrf.name = 'csrf_token'; csrf.value = '{{ csrf_token() }}'; form.appendChild(csrf);
-        document.body.appendChild(form); showSavingAlert(); form.submit();
-    }
-
-    function showSavingAlert() { Swal.fire({ title: 'Saving...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } }); }
     function checkLdapServerStatus() { fetch('/system/ldap/status').then(r => r.json()).then(d => { const b = document.getElementById('ldapServerStatus'); b.className = 'badge rounded-pill badge-authority ' + (d.status === 'online' ? 'bg-success' : (d.status === 'offline' ? 'bg-danger' : 'bg-secondary')); b.innerHTML = d.status.toUpperCase(); }); }
     function checkDnsStatus() { fetch('/system/dns/status').then(r => r.json()).then(d => { const b = document.getElementById('dnsStatus'); b.className = 'badge rounded-pill badge-authority ' + (d.status === 'online' ? 'bg-success' : 'bg-secondary'); b.innerHTML = d.status.toUpperCase(); }); }
     function checkProxyStatus() { fetch('/system/proxy/status').then(r => r.json()).then(d => { const b = document.getElementById('proxyStatus'); b.className = 'badge rounded-pill badge-authority ' + (d.status === 'online' ? 'bg-success' : 'bg-secondary'); b.innerHTML = d.status.toUpperCase(); }); }

@@ -69,7 +69,9 @@ def init_db(conn=None):
                 db.execute('''
                     CREATE TABLE IF NOT EXISTS users (
                         username TEXT PRIMARY KEY,
-                        password_hash TEXT NOT NULL
+                        password_hash TEXT NOT NULL,
+                        profile_id INTEGER DEFAULT 1,
+                        mfa_secret TEXT -- New: TOTP Secret
                     )
                 ''')
 
@@ -137,19 +139,25 @@ def init_db(conn=None):
                                    "dashboard": "r", "system": "r", "tools": "r"
                                })))
 
-                # Users Table Migration (Add profile_id)
+                # Users Table Migration
                 cursor = db.execute("PRAGMA table_info(users)")
                 user_columns = [info[1] for info in cursor.fetchall()]
+                
+                # Migrate: profile_id
                 if 'profile_id' not in user_columns:
                     try:
-                        # SQLite limitation: Cannot add REFERENCES in ALTER TABLE easily.
-                        # Adding column without FK constraint for migration.
                         db.execute('ALTER TABLE users ADD COLUMN profile_id INTEGER DEFAULT 1')
                     except Exception as ex:
                         logger.error(f"Migration error (profile_id): {ex}")
-
                     # Ensure admin has correct profile
                     db.execute("UPDATE users SET profile_id = 1 WHERE username = 'admin'")
+
+                # Migrate: mfa_secret
+                if 'mfa_secret' not in user_columns:
+                    try:
+                        db.execute('ALTER TABLE users ADD COLUMN mfa_secret TEXT')
+                    except Exception as ex:
+                        logger.error(f"Migration error (mfa_secret): {ex}")
 
                 db.commit()
             except Exception as e:

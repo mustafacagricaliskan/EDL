@@ -223,7 +223,7 @@ class TestMissingCoverage(unittest.TestCase):
         self.assertEqual(len(response.json), 1)
         self.assertEqual(response.json[0]['name'], "Test Job")
 
-    @patch('threat_feed_aggregator.log_manager.clear_logs')
+    @patch('threat_feed_aggregator.routes.api.clear_logs')
     def test_clear_live_logs(self, mock_clear):
         self.login()
         response = self.client.post('/api/live_logs/clear')

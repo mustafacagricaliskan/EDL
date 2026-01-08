@@ -4,6 +4,8 @@ import os
 import time
 from datetime import UTC, datetime
 
+from aiohttp import BasicAuth
+
 from .config_manager import DATA_DIR, read_config, read_stats, write_stats
 from .data_collector import fetch_data_from_url_async, get_async_session
 from .db_manager import (
@@ -118,7 +120,11 @@ class FeedAggregator:
         url = source_config["url"]
         start_time = time.time()
 
-        raw_data = await fetch_data_from_url_async(url, session=session)
+        auth = None
+        if source_config.get("auth_user") and source_config.get("auth_pass"):
+            auth = BasicAuth(source_config["auth_user"], source_config["auth_pass"])
+
+        raw_data = await fetch_data_from_url_async(url, session=session, auth=auth)
 
         duration = time.time() - start_time
         return raw_data, [], duration

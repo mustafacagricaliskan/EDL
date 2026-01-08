@@ -54,12 +54,30 @@ def parse_json(raw_data, key=None):
     """
     Parses JSON data. Expects a list of strings or a list of objects.
     If a key is provided, it will be used to extract the indicator from each object.
+    Supports dot notation for nested keys (e.g. 'attributes.ip_address').
     """
     try:
         data = json.loads(raw_data)
         if isinstance(data, list):
-            if key and isinstance(data[0], dict):
-                return [item[key] for item in data if key in item]
+            if key:
+                # Handle nested keys
+                keys = key.split('.')
+                results = []
+                for item in data:
+                    if not isinstance(item, dict): continue
+                    val = item
+                    try:
+                        for k in keys:
+                            if isinstance(val, dict):
+                                val = val.get(k)
+                            else:
+                                val = None
+                                break
+                        if val:
+                            results.append(str(val))
+                    except AttributeError:
+                        continue
+                return results
             else:
                 return [str(item) for item in data]
     except (json.JSONDecodeError, IndexError):

@@ -37,6 +37,7 @@ function updateSourceStats() {
         .then(data => {
             const sources = data.sources || {};
             const totals = data.totals || {};
+            const countryStats = data.country_stats || [];
 
             // 1. Update Top Cards
             if (totals.total !== undefined) document.getElementById('stat-total').textContent = totals.total;
@@ -62,6 +63,28 @@ function updateSourceStats() {
                         }
                     }
                 });
+            }
+
+            // 3. Update Country Stats Table & Map
+            if (countryStats.length > 0) {
+                const tbody = document.getElementById('countryStatsTableBody');
+                if (tbody) {
+                    let html = '';
+                    countryStats.forEach(c => {
+                        html += `<tr><td class="small py-2">${c.country_code}</td><td class="text-end small py-2 fw-bold text-primary">${c.count}</td></tr>`;
+                    });
+                    tbody.innerHTML = html;
+                }
+
+                // Update Map
+                if (window.mapInstance) {
+                    const mapData = {};
+                    countryStats.forEach(c => { mapData[c.country_code] = c.count; });
+                    // jsVectorMap method to update region values
+                    if (window.mapInstance.series && window.mapInstance.series.regions && window.mapInstance.series.regions[0]) {
+                        window.mapInstance.series.regions[0].setValues(mapData);
+                    }
+                }
             }
         });
 }
@@ -437,7 +460,7 @@ function initMap() {
     const data = AppConfig.countryStats;
     try { 
         if (typeof jsVectorMap !== 'undefined') { 
-            const map = new jsVectorMap({ 
+            window.mapInstance = new jsVectorMap({ 
                 selector: '#world-map', 
                 map: 'world', 
                 zoomOnScroll: false, 
@@ -542,4 +565,91 @@ window.runSingleSource = runSingleSource;
 window.testSource = testSource;
 window.showAddWhitelistModal = showAddWhitelistModal;
 window.showAddBlacklistModal = showAddBlacklistModal;
-// Moved to source_manager.js: submitForm, showAddSourceModal, showEditSourceModal
+
+// Functions for importing lists
+function showImportWhitelistModal() {
+    Swal.fire({
+        title: 'Import Safe List',
+        html: `
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-bold">Select File (TXT, JSON, XML)</label>
+                <input type="file" id="importFile" class="form-control" accept=".txt,.json,.xml">
+                <small class="text-muted">Supports lists of IPs, CIDRs, or Domains.</small>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Import',
+        preConfirm: () => {
+            const file = document.getElementById('importFile').files[0];
+            if (!file) Swal.showValidationMessage('Please select a file');
+            return file;
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            uploadFile('/system/whitelist/import', result.value);
+        }
+    });
+}
+
+function showImportBlacklistModal() {
+    Swal.fire({
+        title: 'Import Block List',
+        html: `
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-bold">Select File (TXT, JSON, XML)</label>
+                <input type="file" id="importFile" class="form-control" accept=".txt,.json,.xml">
+                <small class="text-muted">Supports lists of IPs, CIDRs, or Domains.</small>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Import',
+        preConfirm: () => {
+            const file = document.getElementById('importFile').files[0];
+            if (!file) Swal.showValidationMessage('Please select a file');
+            return file;
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            uploadFile('/system/blacklist/import', result.value);
+        }
+    });
+}
+
+function uploadFile(url, file) {
+    const formData = new FormData();
+    formData.append('import_file', file);
+    formData.append('csrf_token', getCsrfToken());
+
+    Swal.fire({
+        title: 'Importing...',
+        text: 'Parsing and validating file content.',
+        didOpen: () => Swal.showLoading()
+    });
+
+    fetch(url, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else {
+            window.location.reload();
+        }
+    })
+    .catch(error => {
+        Swal.fire('Error', 'Upload failed: ' + error, 'error');
+    });
+}
+
+window.showImportWhitelistModal = showImportWhitelistModal;
+window.showImportBlacklistModal = showImportBlacklistModal;
+
+function submitForm(action, data) {
+    const form = document.createElement('form'); form.method = 'POST'; form.action = action;
+    for (const key in data) { const input = document.createElement('input'); input.type = 'hidden'; input.name = key; input.value = data[key]; form.appendChild(input); }
+    const csrf = document.createElement('input'); csrf.type = 'hidden'; csrf.name = 'csrf_token'; csrf.value = getCsrfToken();
+    form.appendChild(csrf);
+    document.body.appendChild(form); form.submit();
+}
+window.submitForm = submitForm;

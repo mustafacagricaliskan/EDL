@@ -296,6 +296,16 @@ def validate_indicator(item):
         import re
         if re.match(r'^[a-zA-Z0-9\-\.]+$', item):
             return True, "domain"
+        
+        # Check for scheme-less URLs (e.g. example.com/path)
+        try:
+            parsed_simulated = urlparse(f"http://{item}")
+            if parsed_simulated.netloc and '.' in parsed_simulated.netloc:
+                # Check if the host part is valid-ish
+                if re.match(r'^[a-zA-Z0-9\-\.]+$', parsed_simulated.netloc):
+                    return True, "url"
+        except Exception:
+            pass
 
     return False, "invalid"
 

@@ -34,7 +34,8 @@ from .repositories.indicator_repo import (
     recalculate_scores,
     get_all_indicators,
     get_all_indicators_iter,
-    clean_database_vacuum
+    clean_database_vacuum,
+    get_source_counts
 )
 from .repositories.job_repo import (
     clear_job_history,

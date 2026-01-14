@@ -175,6 +175,140 @@ def change_user_password():
 
     return redirect(url_for('system.index'))
 
+def _parse_import_file(file):
+    """
+    Parses uploaded file (txt, json, xml) and returns unique items set.
+    """
+    import json
+    import xml.etree.ElementTree as ET
+    
+    filename = file.filename.lower()
+    content = file.read().decode('utf-8', errors='ignore')
+    items = set()
+
+    try:
+        if filename.endswith('.json'):
+            data = json.loads(content)
+            if isinstance(data, list):
+                for entry in data:
+                    if isinstance(entry, str):
+                        items.add(entry)
+                    elif isinstance(entry, dict):
+                        # Extract from common keys
+                        for key in ['item', 'value', 'ip', 'domain', 'url', 'indicator']:
+                            if key in entry:
+                                items.add(str(entry[key]))
+                                break
+            elif isinstance(data, dict):
+                 # Try to find a list in the dict
+                 for key, value in data.items():
+                     if isinstance(value, list):
+                         for entry in value:
+                             if isinstance(entry, str):
+                                 items.add(entry)
+        elif filename.endswith('.xml'):
+            root = ET.fromstring(content)
+            # Iterate all elements, check for specific tags or just text
+            for elem in root.iter():
+                # Filter for likely tags to avoid extracting metadata
+                if elem.tag.lower() in ['item', 'value', 'ip', 'domain', 'url', 'indicator', 'host'] and elem.text:
+                     items.add(elem.text.strip())
+        else:
+            # Default to text (one per line)
+            for line in content.splitlines():
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    # Remove comments if inline? No, simple strip for now
+                    items.add(line.split()[0] if ' ' in line else line)
+    except Exception as e:
+        return None, str(e)
+    
+    return list(items), None
+
+@bp_system.route('/whitelist/import', methods=['POST'])
+@login_required
+def import_whitelist():
+    if 'import_file' not in request.files:
+        flash('No file part', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    file = request.files['import_file']
+    if file.filename == '':
+        flash('No selected file', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    items, error = _parse_import_file(file)
+    if error:
+        flash(f'Error parsing file: {error}', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    from ..utils import validate_indicator
+    
+    count = 0
+    errors = 0
+    
+    for item in items:
+        is_valid, _ = validate_indicator(item)
+        if is_valid:
+            # We add description as "Imported from <filename>"
+            success, _ = add_whitelist_item(item, f"Imported from {file.filename}")
+            if success:
+                count += 1
+        else:
+            errors += 1
+
+    if count > 0:
+        # Cleanup whitelisted items from DB immediately
+        valid_items = [i for i in items if validate_indicator(i)[0]]
+        delete_whitelisted_indicators(valid_items)
+        flash(f'Successfully imported {count} items to Safe List. ({errors} skipped/invalid)', 'success')
+    else:
+        flash(f'No valid items imported. ({errors} skipped/invalid)', 'warning')
+
+    return redirect(url_for('dashboard.index'))
+
+@bp_system.route('/blacklist/import', methods=['POST'])
+@login_required
+def import_blacklist():
+    if 'import_file' not in request.files:
+        flash('No file part', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    file = request.files['import_file']
+    if file.filename == '':
+        flash('No selected file', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    items, error = _parse_import_file(file)
+    if error:
+        flash(f'Error parsing file: {error}', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    from ..utils import validate_indicator
+    
+    count = 0
+    errors = 0
+    
+    for item in items:
+        is_valid, inferred_type = validate_indicator(item)
+        if is_valid:
+            item_type = inferred_type if inferred_type != 'unknown' else 'ip'
+            success, _ = add_api_blacklist_item(item, item_type=item_type, comment=f"Imported from {file.filename}")
+            if success:
+                count += 1
+        else:
+            errors += 1
+
+    if count > 0:
+        # Trigger regeneration
+        from ..aggregator import regenerate_edl_files
+        regenerate_edl_files()
+        flash(f'Successfully imported {count} items to Block List. ({errors} skipped/invalid)', 'success')
+    else:
+        flash(f'No valid items imported. ({errors} skipped/invalid)', 'warning')
+
+    return redirect(url_for('dashboard.index'))
+
 @bp_system.route('/add_source', methods=['POST'])
 @login_required
 def add_source():
@@ -191,6 +325,13 @@ def add_source():
 
     if name and url:
         config = read_config()
+
+        # Check for duplicate URL
+        for existing_source in config.get("source_urls", []):
+            if existing_source.get("url") == url:
+                flash(f'Error: The URL "{url}" is already configured for source "{existing_source.get("name")}".', 'danger')
+                return redirect(url_for('dashboard.index'))
+
         new_source = {
             "name": name,
             "url": url,

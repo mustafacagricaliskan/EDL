@@ -38,6 +38,13 @@ def identify_indicator_type(indicator):
     if URL_PATTERN.match(indicator):
         return "url"
 
+    # Check for Schemeless URL (e.g. domain.com/path)
+    if '/' in indicator and not indicator.startswith('/'):
+        parts = indicator.split('/', 1)
+        # Check if the domain part is valid
+        if DOMAIN_PATTERN.match(parts[0]):
+            return "url"
+
     # Check for Domain
     if DOMAIN_PATTERN.match(indicator):
          return "domain"

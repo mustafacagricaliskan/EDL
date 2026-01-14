@@ -226,3 +226,15 @@ def get_historical_stats(days=30, conn=None):
             ORDER BY timestamp ASC
         ''', (cutoff,))
         return [dict(row) for row in cursor.fetchall()]
+
+def get_source_counts(conn=None):
+    """
+    Returns a dictionary mapping source_name to indicator count.
+    """
+    with db_transaction(conn) as db:
+        try:
+            cursor = db.execute('SELECT source_name, COUNT(*) as count FROM indicator_sources GROUP BY source_name')
+            return {row['source_name']: row['count'] for row in cursor.fetchall()}
+        except Exception as e:
+            logger.error(f"Error getting source counts: {e}")
+            return {}

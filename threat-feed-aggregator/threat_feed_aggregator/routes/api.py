@@ -255,12 +255,19 @@ def clear_live_logs_route():
 @login_required
 def source_stats_api():
     """Returns current counts and last updated times for all sources."""
+    from ..config_manager import read_config, read_stats
+    from ..db_manager import (
+        get_country_stats,
+        get_indicator_counts_by_type,
+        get_unique_indicator_count,
+    )
 
     stats = read_stats()
     config = read_config()
 
     total_count = get_unique_indicator_count()
     counts_by_type = get_indicator_counts_by_type()
+    country_stats = get_country_stats()
 
     formatted_stats = {}
     for name, data in stats.items():
@@ -283,7 +290,8 @@ def source_stats_api():
             "ip": counts_by_type.get('ip', 0) + counts_by_type.get('cidr', 0),
             "domain": counts_by_type.get('domain', 0) + counts_by_type.get('url', 0),
             "feeds": len(config.get('source_urls', []))
-        }
+        },
+        "country_stats": country_stats
     })
 
 

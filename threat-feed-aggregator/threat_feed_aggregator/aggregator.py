@@ -20,6 +20,7 @@ from .db_manager import (
     remove_old_indicators,
     save_historical_stats,
     upsert_indicators_bulk,
+    get_source_counts,
 )
 from .geoip_manager import get_country_code
 from .output_formatter import format_for_fortinet, format_for_palo_alto, format_for_url_list
@@ -316,6 +317,24 @@ def run_aggregator(source_urls):
 
     _cleanup_whitelisted_items_from_db()
 
+    # --- FIX: Update Stats with ACTUAL DB Counts ---
+    actual_db_counts = get_source_counts()
+    for name, count in actual_db_counts.items():
+        if name in current_stats:
+            current_stats[name]["count"] = count
+        else:
+            # If source exists in DB but not in current run stats (maybe disabled in config but has old data)
+            # We can choose to show it or not. For now, let's only update existing entries or ensure structure.
+            pass
+            
+    # Also ensure any source in source_urls has its count updated from DB if it exists
+    for s in source_urls:
+        s_name = s['name']
+        if s_name in actual_db_counts:
+            if s_name not in current_stats:
+                current_stats[s_name] = {"fetch_time": "N/A", "last_updated": "N/A"}
+            current_stats[s_name]["count"] = actual_db_counts[s_name]
+
     current_stats["last_updated"] = datetime.now(UTC).isoformat()
     write_stats(current_stats)
     save_historical_stats()
@@ -344,8 +363,13 @@ def fetch_and_process_single_feed(source_config):
         # Update Stats immediately
         if result:
             current_stats = read_stats()
+            
+            # Use actual DB count instead of fetch count
+            actual_db_counts = get_source_counts()
+            db_count = actual_db_counts.get(name, result["count"]) # Fallback to result count if not in DB yet (unlikely)
+
             current_stats[name] = {
-                "count": result["count"],
+                "count": db_count,
                 "fetch_time": result["fetch_time"],
                 "last_updated": result["last_updated"]
             }

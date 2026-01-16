@@ -173,31 +173,41 @@ class FeedAggregator:
     def save_batch(self, items, source_name):
         """
         Sync DB operation. Should be run in executor.
+        Optimized to use a single connection transaction for all batches.
         """
+        from .database.connection import db_transaction
+        
         batch_size = 5000
         total_batches = (len(items) + batch_size - 1) // batch_size
 
         logger.info(f"[{source_name}] Starting DB upsert for {len(items)} items in {total_batches} batches.")
         job_service.update_job_status(source_name, "Saving", f"Writing {len(items)} items (0/{total_batches} batches)...")
 
-        for i in range(0, len(items), batch_size):
-            batch = items[i:i + batch_size]
-            current_batch_num = (i // batch_size) + 1
+        # Use a single connection/transaction for the whole process to avoid overhead
+        with db_transaction(self.db_conn) as conn:
+            for i in range(0, len(items), batch_size):
+                batch = items[i:i + batch_size]
+                current_batch_num = (i // batch_size) + 1
 
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    upsert_indicators_bulk(batch, source_name=source_name, conn=self.db_conn)
-                    msg = f"Written batch {current_batch_num}/{total_batches} ({len(batch)} items)"
-                    logger.info(f"[{source_name}] {msg}")
-                    job_service.update_job_status(source_name, "Saving", msg)
-                    break
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        logger.warning(f"[{source_name}] Error writing batch {current_batch_num} (Attempt {attempt+1}): {e}. Retrying...")
-                        time.sleep(2 * (attempt + 1))
-                    else:
-                        logger.error(f"[{source_name}] Failed to write batch {current_batch_num} after {max_retries} attempts: {e}")
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        # Pass the existing connection to avoid creating new ones
+                        upsert_indicators_bulk(batch, source_name=source_name, conn=conn)
+                        
+                        msg = f"Written batch {current_batch_num}/{total_batches} ({len(batch)} items)"
+                        # Reduce log noise for huge files, log every 5 batches
+                        if current_batch_num % 5 == 0 or current_batch_num == total_batches:
+                            logger.info(f"[{source_name}] {msg}")
+                        
+                        job_service.update_job_status(source_name, "Saving", msg)
+                        break
+                    except Exception as e:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"[{source_name}] Error writing batch {current_batch_num} (Attempt {attempt+1}): {e}. Retrying...")
+                            time.sleep(2 * (attempt + 1))
+                        else:
+                            logger.error(f"[{source_name}] Failed to write batch {current_batch_num} after {max_retries} attempts: {e}")
 
     async def process_source(self, source_config, recalculate=True, session=None):
         name = source_config["name"]

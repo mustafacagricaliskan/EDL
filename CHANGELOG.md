@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.1] - 2026-01-16
+
+### Fixed
+- **Parsing Logic:** Updated `DOMAIN_PATTERN` regex to support modern Top-Level Domains (TLDs) longer than 6 characters (e.g., `.online`, `.cloud`, `.istanbul`). This fixes the issue where sources like USOM were showing 0 indicators.
+- **Whitelist Logic:** Fixed a bug in `is_whitelisted` where the global text-based safe list (`safe_list.txt`) was being ignored for domain indicators.
+- **Database Performance:** Optimized `save_batch` in the aggregator to use a single database transaction for bulk inserts, significantly improving performance and stability when processing massive feeds (100k+ items).
+
 ## [1.13.0] - 2026-01-16
 
 ### Added

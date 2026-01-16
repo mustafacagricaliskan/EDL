@@ -149,6 +149,11 @@ def is_whitelisted(indicator, whitelist_db_items=None, precomputed_db_nets=None)
     Supports IPs, CIDRs, and exact string matches for Domains.
     """
     # 1. Global Safe List Check
+    # Check text items (Exact match for domains/IPs in file)
+    if indicator in SAFE_ITEMS:
+        return True, "Global Safe List (Exact)"
+    
+    # Check networks
     is_safe, reason = _check_global_safelist(indicator)
     if is_safe:
         return True, reason

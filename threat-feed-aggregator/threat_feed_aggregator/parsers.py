@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 # Pre-compile regex patterns for performance
 URL_PATTERN = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+")
-DOMAIN_PATTERN = re.compile(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$")
+# Updated DOMAIN_PATTERN to support modern TLDs (up to 63 chars)
+DOMAIN_PATTERN = re.compile(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$")
 # Simple check for IP candidates (digits and dots or colons)
 IP_CANDIDATE_PATTERN = re.compile(r"^[0-9a-fA-F:./]+$")
 

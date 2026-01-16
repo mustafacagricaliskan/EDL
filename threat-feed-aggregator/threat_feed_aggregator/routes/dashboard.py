@@ -10,6 +10,7 @@ from ..db_manager import (
     get_indicator_counts_by_type,
     get_unique_indicator_count,
     get_whitelist,
+    get_all_custom_lists
 )
 from ..utils import SAFE_ITEMS, format_timestamp
 from . import bp_dashboard
@@ -28,6 +29,7 @@ def index():
     country_stats = get_country_stats()
     whitelist = get_whitelist()
     blacklist = get_api_blacklist_items()
+    custom_lists = get_all_custom_lists()
 
     # Sort safe list for display
     safe_list_sorted = sorted(list(SAFE_ITEMS))
@@ -75,7 +77,7 @@ def index():
             'interval': f"{job.trigger.interval.total_seconds() / 60} minutes" if isinstance(job.trigger, IntervalTrigger) else 'N/A'
         })
 
-    return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template, total_indicator_count=total_indicator_count, indicator_counts_by_type=indicator_counts_by_type, whitelist=whitelist, blacklist=blacklist, country_stats=country_stats, safe_list=safe_list_sorted)
+    return render_template('index.html', config=config, urls=config.get("source_urls", []), stats=formatted_stats, scheduled_jobs=jobs_for_template, total_indicator_count=total_indicator_count, indicator_counts_by_type=indicator_counts_by_type, whitelist=whitelist, blacklist=blacklist, country_stats=country_stats, safe_list=safe_list_sorted, custom_lists=custom_lists)
 
 @bp_dashboard.route('/data/<path:filename>')
 @login_required

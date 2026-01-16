@@ -24,10 +24,62 @@ from ..db_manager import (
     set_admin_password,
     update_admin_profile,
     update_local_user_password,
-    is_mfa_enabled
+    is_mfa_enabled,
+    create_custom_list,
+    delete_custom_list
 )
 from . import bp_system
 from .auth import login_required
+
+
+@bp_system.route('/custom_lists/add', methods=['POST'])
+@login_required
+def add_custom_list_route():
+    import json
+    name = request.form.get('name')
+    data_format = request.form.get('format', 'text')
+    
+    # Types and Sources come as comma-separated or list from form
+    # If using checkboxes with same name:
+    sources = request.form.getlist('sources')
+    
+    # If types are sent as comma separated string "ip,domain" or array
+    types_input = request.form.get('types') # If hidden input
+    if not types_input:
+        # Check individual checkboxes if not sent as one field
+        types = []
+        if request.form.get('type_ip'): types.extend(['ip', 'cidr'])
+        if request.form.get('type_domain'): types.append('domain')
+        if request.form.get('type_url'): types.append('url')
+    else:
+        types = types_input.split(',')
+
+    if not name:
+        flash('List Name is required.', 'danger')
+        return redirect(url_for('dashboard.index'))
+    
+    if not sources:
+        flash('At least one source must be selected.', 'danger')
+        return redirect(url_for('dashboard.index'))
+        
+    try:
+        _, token = create_custom_list(name, sources, types, data_format)
+        flash(f'Custom EDL "{name}" created successfully.', 'success')
+    except Exception as e:
+        flash(f'Error creating list: {str(e)}', 'danger')
+
+    return redirect(url_for('dashboard.index'))
+
+@bp_system.route('/custom_lists/delete', methods=['POST'])
+@login_required
+def remove_custom_list_route():
+    list_id = request.form.get('list_id', type=int)
+    if list_id:
+        if delete_custom_list(list_id):
+            flash('Custom EDL deleted successfully.', 'success')
+        else:
+            flash('Error deleting Custom EDL.', 'danger')
+    return redirect(url_for('dashboard.index'))
 
 
 @bp_system.route('/')

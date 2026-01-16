@@ -142,30 +142,85 @@
                             <a href="{{ url_for('dashboard.download_file', filename='palo_alto_edl.txt') }}" class="btn btn-outline-dark text-start p-2 small d-flex justify-content-between"><span>Palo Alto Networks</span><i class="fas fa-download"></i></a>
                             <a href="{{ url_for('dashboard.download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-dark text-start p-2 small d-flex justify-content-between"><span>Fortinet FortiGate</span><i class="fas fa-download"></i></a>
                         </div>
-                        <h6 class="form-label-custom small fw-bold mb-2">Generic EDL Builder</h6>
-                        <div class="bg-light p-2 rounded border mb-3">
-                            <div class="mb-2">
-                                <label class="small text-muted mb-1">Select Types</label><br>
-                                <div class="btn-group w-100" role="group">
-                                    <input type="checkbox" class="btn-check" id="type_ip" checked autocomplete="off">
-                                    <label class="btn btn-outline-primary btn-xs" for="type_ip">IP/CIDR</label>
-                                    <input type="checkbox" class="btn-check" id="type_domain" autocomplete="off">
-                                    <label class="btn btn-outline-primary btn-xs" for="type_domain">Domain</label>
-                                    <input type="checkbox" class="btn-check" id="type_url" autocomplete="off">
-                                    <label class="btn btn-outline-primary btn-xs" for="type_url">URL</label>
+                        <h6 class="form-label-custom small fw-bold mb-2">Custom EDL Manager</h6>
+                        <div class="card border mb-3">
+                            <div class="card-header bg-light p-1">
+                                <ul class="nav nav-tabs card-header-tabs m-0 small" id="edlTabs" role="tablist">
+                                    <li class="nav-item" role="presentation"><button class="nav-link active py-1 px-2" id="saved-tab" data-bs-toggle="tab" data-bs-target="#saved" type="button" role="tab">Saved Lists</button></li>
+                                    <li class="nav-item" role="presentation"><button class="nav-link py-1 px-2" id="create-tab" data-bs-toggle="tab" data-bs-target="#create" type="button" role="tab">Create New</button></li>
+                                </ul>
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="tab-content" id="edlTabsContent">
+                                    <!-- Saved Lists Tab -->
+                                    <div class="tab-pane fade show active" id="saved" role="tabpanel">
+                                        {% if custom_lists %}
+                                            <div class="list-group list-group-flush small" style="max-height: 200px; overflow-y: auto;">
+                                                {% for list in custom_lists %}
+                                                <div class="list-group-item px-0 py-2">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <strong class="text-truncate" title="{{ list.name }}">{{ list.name }}</strong>
+                                                        <form action="{{ url_for('system.remove_custom_list_route') }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this list?');">
+                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                            <input type="hidden" name="list_id" value="{{ list.id }}">
+                                                            <button type="submit" class="btn btn-link text-danger p-0" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                                                        </form>
+                                                    </div>
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="text" class="form-control" style="font-size: 0.7rem;" value="{{ url_for('api.get_saved_custom_edl', token=list.token, _external=True) }}" readonly id="list_url_{{ list.id }}">
+                                                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('list_url_{{ list.id }}')"><i class="fas fa-copy"></i></button>
+                                                    </div>
+                                                    <div class="mt-1 text-muted" style="font-size: 0.65rem;">
+                                                        Fmt: {{ list.format }} | Src: {{ list.sources|length }}
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <p class="text-center text-muted small my-3">No custom lists saved.</p>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Create New Tab -->
+                                    <div class="tab-pane fade" id="create" role="tabpanel">
+                                        <form action="{{ url_for('system.add_custom_list_route') }}" method="POST">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <div class="mb-2">
+                                                <input type="text" class="form-control form-control-sm" name="name" placeholder="List Name (e.g. High Risk IPs)" required>
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="small text-muted mb-1">Content Type</label><br>
+                                                <div class="btn-group w-100" role="group">
+                                                    <input type="checkbox" class="btn-check" name="type_ip" id="type_ip" checked>
+                                                    <label class="btn btn-outline-primary btn-xs" for="type_ip">IP/CIDR</label>
+                                                    <input type="checkbox" class="btn-check" name="type_domain" id="type_domain">
+                                                    <label class="btn btn-outline-primary btn-xs" for="type_domain">Domain</label>
+                                                    <input type="checkbox" class="btn-check" name="type_url" id="type_url">
+                                                    <label class="btn btn-outline-primary btn-xs" for="type_url">URL</label>
+                                                </div>
+                                            </div>
+                                            <div class="mb-2">
+                                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                                    <label class="small text-muted mb-0">Sources</label>
+                                                    <a href="#" onclick="toggleAllSources(); return false;" class="small text-decoration-none" style="font-size: 0.7rem;">Toggle All</a>
+                                                </div>
+                                                <div class="bg-white border rounded p-2" style="max-height: 120px; overflow-y: auto;" id="edl_sources_list">
+                                                    <!-- Sources populated by JS -->
+                                                </div>
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="small text-muted mb-1">Format</label>
+                                                <select name="format" class="form-select form-select-sm">
+                                                    <option value="text">Plain Text</option>
+                                                    <option value="csv">CSV</option>
+                                                    <option value="json">JSON</option>
+                                                </select>
+                                            </div>
+                                            <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-save me-1"></i> Save Custom List</button>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="mb-2">
-                                <label class="small text-muted mb-1">Format</label>
-                                <select id="edl_format" class="form-select form-select-sm">
-                                    <option value="text">Plain Text</option>
-                                    <option value="csv">CSV</option>
-                                    <option value="json">JSON</option>
-                                </select>
-                            </div>
-                            <button onclick="copyGenericEDL()" class="btn btn-primary btn-sm w-100">
-                                <i class="fas fa-copy me-1"></i> Copy API Link
-                            </button>
                         </div>
                         <h6 class="form-label-custom small fw-bold mb-2">Service Whitelists</h6>
                         <div class="d-flex flex-column gap-2">
@@ -478,6 +533,6 @@
             ]
         };
     </script>
-    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js', v=2) }}"></script>
 </body>
 </html>

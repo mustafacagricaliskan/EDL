@@ -51,3 +51,20 @@ def clear_job_history(conn=None):
             except Exception as e:
                 logger.error(f"Error clearing job history: {e}")
                 return False
+
+def get_latest_job_times(conn=None):
+    """
+    Returns a dictionary mapping source_name to the latest successful end_time.
+    """
+    with db_transaction(conn) as db:
+        try:
+            cursor = db.execute('''
+                SELECT source_name, MAX(end_time) as last_updated
+                FROM job_history
+                WHERE status = 'success' AND end_time IS NOT NULL
+                GROUP BY source_name
+            ''')
+            return {row['source_name']: row['last_updated'] for row in cursor.fetchall()}
+        except Exception as e:
+            logger.error(f"Error getting latest job times: {e}")
+            return {}

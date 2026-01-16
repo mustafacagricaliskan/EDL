@@ -24,6 +24,8 @@ from ..db_manager import (
     remove_api_blacklist_item,
     remove_whitelist_item,
     get_all_indicators_iter,
+    get_filtered_indicators_iter,
+    get_custom_list_by_token,
 )
 from ..github_services import process_github_feeds
 from ..log_manager import clear_logs, get_live_logs
@@ -35,6 +37,44 @@ from . import bp_api
 from .auth import api_key_required, login_required
 
 logger = logging.getLogger(__name__)
+
+
+@bp_api.route('/edl/custom/<token>')
+def get_saved_custom_edl(token):
+    """
+    Returns a saved custom EDL by its token.
+    No Authentication required (Token is the secret).
+    """
+    list_config = get_custom_list_by_token(token)
+    if not list_config:
+        return jsonify({'error': 'List not found'}), 404
+
+    include_sources = list_config['sources']
+    include_types = list_config['types']
+    output_format = list_config['format']
+    
+    # Fetch Data
+    iterator = get_filtered_indicators_iter(include_sources)
+    
+    indicators_data = {row['indicator']: {
+            'last_seen': row['last_seen'],
+            'country': row['country'],
+            'type': row['type'],
+            'risk_score': row['risk_score']
+        } for row in iterator}
+    
+    if not indicators_data:
+        logger.warning(f"Custom EDL ({token}) returned 0 records. Sources: {include_sources}")
+        
+    output = format_generic(indicators_data, include_types, output_format, '\n')
+    
+    mimetype = 'text/plain'
+    if output_format == 'json':
+        mimetype = 'application/json'
+    elif output_format == 'csv':
+        mimetype = 'text/csv'
+
+    return Response(output, mimetype=mimetype)
 
 
 @bp_api.route('/edl/generic')
@@ -49,6 +89,10 @@ def get_generic_edl():
     """
     types_str = request.args.get('types')
     include_types = types_str.split(',') if types_str else None
+    
+    sources_str = request.args.get('sources')
+    include_sources = sources_str.split(',') if sources_str and sources_str.strip() else None
+
     output_format = request.args.get('format', 'text')
     delimiter = request.args.get('delimiter', '\n')
     
@@ -57,12 +101,14 @@ def get_generic_edl():
         return jsonify({'error': 'Invalid format'}), 400
 
     # Fetch Data
+    iterator = get_filtered_indicators_iter(include_sources)
+    
     indicators_data = {row['indicator']: {
             'last_seen': row['last_seen'],
             'country': row['country'],
             'type': row['type'],
             'risk_score': row['risk_score']
-        } for row in get_all_indicators_iter()}
+        } for row in iterator}
         
     output = format_generic(indicators_data, include_types, output_format, delimiter)
     
@@ -260,6 +306,8 @@ def source_stats_api():
         get_country_stats,
         get_indicator_counts_by_type,
         get_unique_indicator_count,
+        get_source_counts,
+        get_latest_job_times
     )
 
     stats = read_stats()
@@ -268,20 +316,44 @@ def source_stats_api():
     total_count = get_unique_indicator_count()
     counts_by_type = get_indicator_counts_by_type()
     country_stats = get_country_stats()
+    
+    # Fetch real-time data from DB to ensure accuracy
+    real_db_counts = get_source_counts()
+    real_db_times = get_latest_job_times()
 
     formatted_stats = {}
+    # 1. Process sources present in stats.json
     for name, data in stats.items():
         if name == 'last_updated':
             formatted_stats[name] = format_timestamp(data)
             continue
 
-        if isinstance(data, dict) and 'last_updated' in data:
+        if isinstance(data, dict):
+            # Use DB count if available, otherwise fallback to stats file
+            current_count = real_db_counts.get(name, data.get('count', 0))
+            
+            # Use DB timestamp if available, otherwise fallback
+            last_ts = real_db_times.get(name, data.get('last_updated'))
+            
             formatted_stats[name] = {
-                "count": data.get('count', 0),
-                "last_updated": format_timestamp(data['last_updated'])
+                "count": current_count,
+                "last_updated": format_timestamp(last_ts)
             }
         else:
             formatted_stats[name] = data
+            
+    # 2. Ensure sources in DB (but maybe missing in stats.json) are included if they match config
+    configured_sources = [s['name'] for s in config.get('source_urls', [])]
+    
+    # Merge keys from both DB counts and DB times to catch all active sources
+    all_known_sources = set(real_db_counts.keys()) | set(real_db_times.keys())
+    
+    for name in all_known_sources:
+        if name in configured_sources and name not in formatted_stats:
+             formatted_stats[name] = {
+                 "count": real_db_counts.get(name, 0),
+                 "last_updated": format_timestamp(real_db_times.get(name))
+             }
 
     return jsonify({
         "sources": formatted_stats,

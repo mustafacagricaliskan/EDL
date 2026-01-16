@@ -57,9 +57,32 @@ def get_all_indicators_iter(conn=None):
         for row in cursor:
             yield row
 
-def recalculate_scores(source_confidence_map=None, conn=None):
+def get_filtered_indicators_iter(source_names=None, conn=None):
     """
-    Optimized: Recalculates risk scores using a more efficient SQL structure.
+    Generator that yields indicators filtered by specific sources.
+    source_names: List of source names (strings)
+    """
+    with db_transaction(conn) as db:
+        if not source_names:
+            # Fallback to all if no filter provided
+            cursor = db.execute('SELECT indicator, last_seen, country, type, risk_score, source_count FROM indicators')
+        else:
+            placeholders = ','.join(['?'] * len(source_names))
+            query = f'''
+                SELECT DISTINCT i.indicator, i.last_seen, i.country, i.type, i.risk_score, i.source_count
+                FROM indicators i
+                JOIN indicator_sources s ON i.indicator = s.indicator
+                WHERE s.source_name IN ({placeholders})
+            '''
+            cursor = db.execute(query, source_names)
+            
+        for row in cursor:
+            yield row
+
+def recalculate_scores(source_confidence_map=None, conn=None, target_source=None):
+    """
+    Optimized: Recalculates risk scores.
+    If target_source is provided, only updates indicators associated with that source.
     """
     if source_confidence_map is None:
         source_confidence_map = {}
@@ -68,16 +91,24 @@ def recalculate_scores(source_confidence_map=None, conn=None):
         with db_transaction(conn) as db:
             try:
                 # 1. Update source_count accurately
-                db.execute('''
+                # Optimization: Only update source_count for affected indicators if target_source is set
+                count_where_clause = ""
+                count_params = []
+                if target_source:
+                    count_where_clause = "WHERE indicators.indicator IN (SELECT indicator FROM indicator_sources WHERE source_name = ?)"
+                    count_params = [target_source]
+
+                db.execute(f'''
                     UPDATE indicators
                     SET source_count = (
                         SELECT COUNT(*) 
                         FROM indicator_sources 
                         WHERE indicator_sources.indicator = indicators.indicator
                     )
-                ''')
+                    {count_where_clause}
+                ''', count_params)
 
-                # 2. Use a temporary table for confidence scores to join against
+                # 2. Use a temporary table for confidence scores
                 db.execute('CREATE TEMPORARY TABLE IF NOT EXISTS temp_source_conf (name TEXT PRIMARY KEY, score INTEGER)')
                 db.execute('DELETE FROM temp_source_conf')
 
@@ -85,9 +116,14 @@ def recalculate_scores(source_confidence_map=None, conn=None):
                 if data_to_insert:
                     db.executemany('INSERT INTO temp_source_conf VALUES (?, ?)', data_to_insert)
 
-                # 3. Optimized calculation using a single UPDATE with a correlated subquery
-                # Formula: Max(Confidence) + (Overlap Bonus)
-                db.execute('''
+                # 3. Optimized calculation
+                score_where_clause = "WHERE EXISTS (SELECT 1 FROM indicator_sources WHERE indicator = indicators.indicator)"
+                score_params = []
+                if target_source:
+                    score_where_clause = "WHERE indicators.indicator IN (SELECT indicator FROM indicator_sources WHERE source_name = ?)"
+                    score_params = [target_source]
+
+                db.execute(f'''
                     UPDATE indicators
                     SET risk_score = (
                         SELECT MIN(100, MAX(COALESCE(sc.score, 50)) + ((indicators.source_count - 1) * 5))
@@ -95,11 +131,11 @@ def recalculate_scores(source_confidence_map=None, conn=None):
                         LEFT JOIN temp_source_conf sc ON src.source_name = sc.name
                         WHERE src.indicator = indicators.indicator
                     )
-                    WHERE EXISTS (SELECT 1 FROM indicator_sources WHERE indicator = indicators.indicator)
-                ''')
+                    {score_where_clause}
+                ''', score_params)
 
                 db.commit()
-                logger.info("Scores recalculated efficiently for all indicators.")
+                logger.info(f"Scores recalculated efficiently ({'Target: ' + target_source if target_source else 'Full'}).")
             except Exception as e:
                 logger.error(f"Error recalculating scores: {e}")
                 db.rollback()
@@ -238,3 +274,22 @@ def get_source_counts(conn=None):
         except Exception as e:
             logger.error(f"Error getting source counts: {e}")
             return {}
+
+def get_sources_for_indicator(indicator, conn=None):
+    """
+    Returns a list of dictionaries with source info for a specific indicator.
+    """
+    with db_transaction(conn) as db:
+        try:
+            # Join with indicator_sources to get source info
+            # We can also get last_seen from the link table
+            cursor = db.execute('''
+                SELECT source_name, last_seen 
+                FROM indicator_sources 
+                WHERE indicator = ?
+                ORDER BY last_seen DESC
+            ''', (indicator,))
+            return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error getting sources for indicator {indicator}: {e}")
+            return []

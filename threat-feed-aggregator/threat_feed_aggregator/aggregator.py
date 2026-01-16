@@ -236,7 +236,7 @@ class FeedAggregator:
                     except Exception:
                         confidence_map = {name: source_config.get('confidence', 50)}
 
-                    await loop.run_in_executor(None, recalculate_scores, confidence_map, self.db_conn)
+                    await loop.run_in_executor(None, recalculate_scores, confidence_map, self.db_conn, name)
 
                 await loop.run_in_executor(None, log_job_end, job_id, "success", count, f"Fetch time: {duration:.2f}s", self.db_conn)
                 job_service.update_job_status(name, "Completed", f"Processed {count} items.")

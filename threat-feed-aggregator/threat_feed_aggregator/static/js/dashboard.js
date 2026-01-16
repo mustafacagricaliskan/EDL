@@ -14,6 +14,29 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateSourceStats, 10000);
     setInterval(updateScheduledJobs, 30000); // Update schedules every 30s
 
+    // Populate Sources for Generic EDL
+    const edlList = document.getElementById('edl_sources_list');
+    if (edlList) {
+        if (window.AppConfig && window.AppConfig.sourceUrls && window.AppConfig.sourceUrls.length > 0) {
+            console.log('Populating Custom EDL sources:', window.AppConfig.sourceUrls.length);
+            let html = '';
+            window.AppConfig.sourceUrls.forEach((s, idx) => {
+                html += `
+                    <div class="form-check form-check-sm mb-0">
+                        <input class="form-check-input source-check" type="checkbox" name="sources" value="${s.name}" id="src_chk_${idx}">
+                        <label class="form-check-label small text-truncate d-block" for="src_chk_${idx}" title="${s.name}">
+                            ${s.name}
+                        </label>
+                    </div>
+                `;
+            });
+            edlList.innerHTML = html;
+        } else {
+            console.warn('No sourceUrls found in AppConfig');
+            edlList.innerHTML = '<div class="text-muted small text-center">No sources configured.</div>';
+        }
+    }
+
     // Handle Flash Messages
     if (window.AppConfig && window.AppConfig.flashMessages) {
         window.AppConfig.flashMessages.forEach(msg => {
@@ -525,27 +548,33 @@ function viewAllSchedules() {
         });
 }
 
-function copyGenericEDL() {
-    const types = [];
-    if (document.getElementById('type_ip').checked) types.push('ip', 'cidr');
-    if (document.getElementById('type_domain').checked) types.push('domain');
-    if (document.getElementById('type_url').checked) types.push('url');
+function copyToClipboard(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
     
-    const format = document.getElementById('edl_format').value;
-    const baseUrl = window.location.origin + '/api/edl/generic';
-    const url = `${baseUrl}?types=${types.join(',')}&format=${format}&api_key=YOUR_API_KEY`;
+    el.select();
+    el.setSelectionRange(0, 99999); /* For mobile devices */
     
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText(el.value).then(() => {
         Swal.fire({
             title: 'Copied!',
-            text: 'Generic EDL API link copied to clipboard. Replace YOUR_API_KEY with a valid key.',
+            text: 'URL copied to clipboard.',
             icon: 'success',
-            timer: 3000,
+            timer: 1500,
             toast: true,
             position: 'top-end',
             showConfirmButton: false
         });
     });
+}
+
+function toggleAllSources() {
+    const checks = document.querySelectorAll('.source-check');
+    if (checks.length === 0) return;
+    
+    // Check if all are currently checked
+    const allChecked = Array.from(checks).every(c => c.checked);
+    checks.forEach(c => c.checked = !allChecked);
 }
 
 window.updateSourceStats = updateSourceStats;
@@ -554,7 +583,8 @@ window.updateHistory = updateHistory;
 window.viewAllHistory = viewAllHistory;
 window.updateScheduledJobs = updateScheduledJobs;
 window.viewAllSchedules = viewAllSchedules;
-window.copyGenericEDL = copyGenericEDL;
+window.copyToClipboard = copyToClipboard;
+window.toggleAllSources = toggleAllSources;
 window.updateLogs = updateLogs;
 window.clearTerminal = clearTerminal;
 window.clearHistory = clearHistory;

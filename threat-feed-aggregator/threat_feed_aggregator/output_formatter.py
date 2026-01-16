@@ -17,6 +17,14 @@ def format_generic(indicator_dict, include_types=None, output_format='text', del
     Returns:
         str: Formatted output string.
     """
+    # Optimized for Text format to save memory
+    if output_format == 'text':
+        filtered_indicators = (
+            ind for ind, det in indicator_dict.items()
+            if not include_types or det.get('type') in include_types
+        )
+        return delimiter.join(filtered_indicators)
+
     items = []
     for indicator, details in indicator_dict.items():
         if include_types and details.get('type') not in include_types:

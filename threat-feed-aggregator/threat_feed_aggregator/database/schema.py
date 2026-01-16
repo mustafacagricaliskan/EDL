@@ -100,6 +100,19 @@ def init_db(conn=None):
                     )
                 ''')
 
+                # Custom EDL Lists Table (New for Saved Lists)
+                db.execute('''
+                    CREATE TABLE IF NOT EXISTS custom_lists (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        token TEXT NOT NULL UNIQUE,
+                        sources TEXT NOT NULL, -- JSON list
+                        types TEXT NOT NULL,   -- JSON list
+                        format TEXT NOT NULL DEFAULT 'text',
+                        created_at TEXT NOT NULL
+                    )
+                ''')
+
                 # --- Admin Profiles (RBAC) ---
                 db.execute('''
                     CREATE TABLE IF NOT EXISTS admin_profiles (

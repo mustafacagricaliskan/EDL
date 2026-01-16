@@ -37,6 +37,38 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Internal DB Search Card (New) -->
+            <div class="card settings-card shadow-sm mt-4">
+                <div class="card-header bg-white py-3 border-0">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-database me-2 text-danger"></i>Internal Threat Database</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Check if an indicator (IP, Domain, URL) exists in your aggregated feeds.</p>
+                    <form id="internalSearchForm">
+                        <div class="mb-3">
+                            <label class="form-label-custom">Indicator</label>
+                            <div class="input-group shadow-sm">
+                                <input type="text" id="internalInput" class="form-control" placeholder="IP, Domain, or URL" required>
+                                <button class="btn btn-danger px-4" type="submit" id="internalSearchBtn">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="internalResultArea" class="mt-3 d-none">
+                        <label class="form-label-custom">Search Results</label>
+                        <div class="p-3 bg-light rounded border">
+                            <ul id="internalResultList" class="list-unstyled mb-0 small"></ul>
+                        </div>
+                    </div>
+                    <hr class="my-3">
+                    <div class="small text-muted fw-bold text-uppercase mb-2" style="font-size: 0.65rem; letter-spacing: 0.05em;">Recent Internal Searches</div>
+                    <div id="internalRecentSearches" class="d-flex flex-wrap gap-2">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Result Card -->
@@ -102,6 +134,13 @@
     const searchBtn = document.getElementById('searchBtn');
     const resultCard = document.getElementById('resultCard');
     const noResultPlaceholder = document.getElementById('noResultPlaceholder');
+
+    // Internal Search Elements
+    const internalSearchForm = document.getElementById('internalSearchForm');
+    const internalInput = document.getElementById('internalInput');
+    const internalSearchBtn = document.getElementById('internalSearchBtn');
+    const internalResultArea = document.getElementById('internalResultArea');
+    const internalResultList = document.getElementById('internalResultList');
 
     investigateForm.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -175,6 +214,55 @@
             });
     });
 
+    internalSearchForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const indicator = internalInput.value.trim();
+        if (!indicator) return;
+
+        internalSearchBtn.disabled = true;
+        internalSearchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        internalResultArea.classList.add('d-none');
+
+        fetch('/tools/api/lookup_internal', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ indicator: indicator })
+        })
+        .then(r => r.json())
+        .then(data => {
+            internalSearchBtn.disabled = false;
+            internalSearchBtn.innerHTML = '<i class="fas fa-search"></i>';
+
+            if (data.success) {
+                internalResultList.innerHTML = '';
+                const sources = data.sources || [];
+                
+                if (sources.length > 0) {
+                    sources.forEach(src => {
+                        const li = document.createElement('li');
+                        li.className = 'mb-2 text-dark';
+                        li.innerHTML = `<i class="fas fa-exclamation-triangle text-danger me-2"></i><strong>${src.source_name}</strong><br><small class="text-muted ms-4">Last seen: ${src.last_seen}</small>`;
+                        internalResultList.appendChild(li);
+                    });
+                } else {
+                    internalResultList.innerHTML = '<li class="text-success"><i class="fas fa-check-circle me-2"></i>Not found in any internal threat feed.</li>';
+                }
+                internalResultArea.classList.remove('d-none');
+                saveRecentInternalSearch(indicator);
+            } else {
+                Swal.fire('Error', data.error, 'error');
+            }
+        })
+        .catch(err => {
+            internalSearchBtn.disabled = false;
+            internalSearchBtn.innerHTML = '<i class="fas fa-search"></i>';
+            Swal.fire('Error', 'Service unreachable.', 'error');
+        });
+    });
+
     function saveRecentSearch(ip) {
         let history = JSON.parse(localStorage.getItem('recentIps') || '[]');
         if (!history.includes(ip)) {
@@ -198,6 +286,33 @@
         });
     }
 
-    document.addEventListener('DOMContentLoaded', updateRecentSearches);
+    function saveRecentInternalSearch(term) {
+        let history = JSON.parse(localStorage.getItem('recentInternal') || '[]');
+        // Remove if exists to bubble to top
+        history = history.filter(item => item !== term);
+        history.unshift(term); 
+        if (history.length > 6) history.pop();
+        localStorage.setItem('recentInternal', JSON.stringify(history));
+        updateRecentInternalSearches();
+    }
+
+    function updateRecentInternalSearches() {
+        const container = document.getElementById('internalRecentSearches');
+        const history = JSON.parse(localStorage.getItem('recentInternal') || '[]');
+        container.innerHTML = history.length ? '' : '<span class="text-muted small">No recent history.</span>';
+        history.forEach(term => {
+            const span = document.createElement('span');
+            span.className = 'badge bg-soft-danger text-danger border border-danger px-2 py-2 cursor-pointer';
+            span.style.cursor = 'pointer';
+            span.textContent = term;
+            span.onclick = () => { document.getElementById('internalInput').value = term; internalSearchForm.dispatchEvent(new Event('submit')); };
+            container.appendChild(span);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        updateRecentSearches();
+        updateRecentInternalSearches();
+    });
 </script>
 {% endblock %}

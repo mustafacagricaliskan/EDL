@@ -210,10 +210,12 @@
             ],
             order: [[3, 'desc']],
             language: { search: "", searchPlaceholder: "Global search..." },
+            lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+            pagingType: "full_numbers",
             dom: '<"d-flex justify-content-between align-items-center mb-3"f>rt<"d-flex justify-content-between align-items-center mt-3"lip>'
         });
 
-        // Dynamic Input Logic (Autocomplete)
+        // Filter Logic
         const filterTypeSelect = $('#newFilterType');
         const filterValueInput = $('#newFilterValue');
         const dataList = $('#filterOptionsList');

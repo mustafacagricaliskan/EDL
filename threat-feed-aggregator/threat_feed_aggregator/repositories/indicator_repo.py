@@ -293,3 +293,207 @@ def get_sources_for_indicator(indicator, conn=None):
         except Exception as e:
             logger.error(f"Error getting sources for indicator {indicator}: {e}")
             return []
+
+def get_sources_for_indicators_batch(indicators, conn=None):
+    """
+    Optimized: Returns a dictionary {indicator: [{'source_name': ...}, ...]} for a list of indicators.
+    Solves N+1 query problem.
+    """
+    if not indicators:
+        return {}
+    
+    with db_transaction(conn) as db:
+        try:
+            placeholders = ','.join(['?'] * len(indicators))
+            cursor = db.execute(f'''
+                SELECT indicator, source_name, last_seen 
+                FROM indicator_sources 
+                WHERE indicator IN ({placeholders})
+                ORDER BY last_seen DESC
+            ''', indicators)
+            
+            result = {ind: [] for ind in indicators}
+            for row in cursor.fetchall():
+                result[row['indicator']].append({'source_name': row['source_name'], 'last_seen': row['last_seen']})
+            return result
+        except Exception as e:
+            logger.error(f"Error batch fetching sources: {e}")
+            return {}
+
+def get_indicators_paginated(start=0, length=10, search_value=None, filters=None, order_col='risk_score', order_dir='desc', conn=None):
+    """
+    Retrieves indicators with pagination, global filtering, and column-specific filtering.
+    filters: dict of {column_name: filter_value}
+    """
+    with db_transaction(conn) as db:
+        # 1. Base Query construction
+        # We might need to join if filtering by source
+        base_query = "SELECT DISTINCT i.indicator, i.type, i.country, i.risk_score, i.source_count, i.last_seen FROM indicators i"
+        count_query = "SELECT COUNT(DISTINCT i.indicator) FROM indicators i"
+        
+        joins = []
+        conditions = []
+        params = []
+
+        # 2. Global Filtering (Quick Search)
+        if search_value:
+            conditions.append("(i.indicator LIKE ? OR i.country LIKE ? OR i.type LIKE ?)")
+            search_param = f"%{search_value}%"
+            params.extend([search_param, search_param, search_param])
+
+        # 3. Column Specific Filtering
+        if filters:
+            for col, val in filters.items():
+                if not val: continue
+                
+                if col == 'type':
+                    conditions.append("i.type = ?")
+                    params.append(val)
+                elif col == 'country':
+                    conditions.append("i.country LIKE ?") # Use LIKE for country to allow partial match
+                    params.append(f"%{val}%")
+                elif col == 'level':
+                    if val == 'Critical': conditions.append("i.risk_score >= 90")
+                    elif val == 'High': conditions.append("i.risk_score >= 70 AND i.risk_score < 90")
+                    elif val == 'Medium': conditions.append("i.risk_score >= 40 AND i.risk_score < 70")
+                    elif val == 'Low': conditions.append("i.risk_score < 40")
+                elif col == 'risk_score':
+                    # Enhanced Risk Score Logic:
+                    # If just a number '80' -> score >= 80
+                    # If '>80' -> score > 80
+                    # If '<50' -> score < 50
+                    # If '=50' -> score = 50
+                    val_str = str(val).strip()
+                    operator = ">="
+                    limit = 0
+                    
+                    if val_str.startswith('>='):
+                        operator = ">="
+                        limit = val_str[2:]
+                    elif val_str.startswith('<='):
+                        operator = "<="
+                        limit = val_str[2:]
+                    elif val_str.startswith('>'):
+                        operator = ">"
+                        limit = val_str[1:]
+                    elif val_str.startswith('<'):
+                        operator = "<"
+                        limit = val_str[1:]
+                    elif val_str.startswith('='):
+                        operator = "="
+                        limit = val_str[1:]
+                    else:
+                        operator = ">="
+                        limit = val_str
+                    
+                    try:
+                        limit_int = int(limit)
+                        conditions.append(f"i.risk_score {operator} ?")
+                        params.append(limit_int)
+                    except ValueError:
+                        pass # Ignore invalid number format
+                elif col == 'source':
+                    # Join needed
+                    if "JOIN indicator_sources s ON i.indicator = s.indicator" not in joins:
+                        joins.append("JOIN indicator_sources s ON i.indicator = s.indicator")
+                    conditions.append("s.source_name LIKE ?")
+                    params.append(f"%{val}%")
+                elif col == 'tag':
+                    # Filtering by tag is tricky because tags are derived from source names in app logic.
+                    # We can approximate by filtering source names that map to these tags.
+                    # Mapping: Feodo->Botnet/C2, URLHaus->Malware, USOM->Phishing etc.
+                    if "JOIN indicator_sources s ON i.indicator = s.indicator" not in joins:
+                        joins.append("JOIN indicator_sources s ON i.indicator = s.indicator")
+                    
+                    val_lower = val.lower()
+                    if 'botnet' in val_lower or 'c2' in val_lower:
+                        conditions.append("s.source_name LIKE '%feodo%'")
+                    elif 'malware' in val_lower:
+                        conditions.append("s.source_name LIKE '%urlhaus%'")
+                    elif 'phishing' in val_lower:
+                        conditions.append("(s.source_name LIKE '%usom%' OR s.source_name LIKE '%phishtank%' OR s.source_name LIKE '%openphish%')")
+                    else:
+                        # Fallback generic search in source name
+                        conditions.append("s.source_name LIKE ?")
+                        params.append(f"%{val}%")
+
+        if joins:
+            join_clause = " " + " ".join(joins)
+            base_query += join_clause
+            count_query += join_clause
+
+        if conditions:
+            where_clause = " WHERE " + " AND ".join(conditions)
+            base_query += where_clause
+            count_query += where_clause
+
+        # 4. Total Counts
+        # Calculate filtered count
+        if conditions:
+            cursor = db.execute(count_query, params)
+            filtered_records = cursor.fetchone()[0]
+        
+        # Calculate total records (unfiltered)
+        cursor = db.execute("SELECT COUNT(*) FROM indicators")
+        total_records = cursor.fetchone()[0]
+        
+        if not conditions:
+            filtered_records = total_records
+
+        # 5. Sorting
+        allowed_cols = {
+            'indicator': 'i.indicator', 
+            'type': 'i.type', 
+            'country': 'i.country', 
+            'risk_score': 'i.risk_score', 
+            'source_count': 'i.source_count', 
+            'last_seen': 'i.last_seen'
+        }
+        
+        db_order_col = allowed_cols.get(order_col, 'i.risk_score')
+        
+        if order_dir.lower() not in ['asc', 'desc']:
+            order_dir = 'desc'
+        
+        base_query += f" ORDER BY {db_order_col} {order_dir}"
+
+        # 6. Pagination
+        base_query += " LIMIT ? OFFSET ?"
+        params.extend([length, start])
+
+        # 7. Execution
+        cursor = db.execute(base_query, params)
+        items = [dict(row) for row in cursor.fetchall()]
+
+        return total_records, filtered_records, items
+
+def get_filter_options(column, search_term=None, limit=20, conn=None):
+    """
+    Returns distinct values for a specific column to support autocomplete.
+    Supports columns: source, country, type, tag (derived).
+    """
+    with db_transaction(conn) as db:
+        results = []
+        search_param = f"%{search_term}%" if search_term else "%"
+        
+        if column == 'source':
+            # Query indicator_sources.source_name
+            query = "SELECT DISTINCT source_name FROM indicator_sources WHERE source_name LIKE ? ORDER BY source_name LIMIT ?"
+            cursor = db.execute(query, (search_param, limit))
+            results = [row[0] for row in cursor.fetchall()]
+            
+        elif column == 'country':
+            query = "SELECT DISTINCT country FROM indicators WHERE country LIKE ? ORDER BY country LIMIT ?"
+            cursor = db.execute(query, (search_param, limit))
+            results = [row[0] for row in cursor.fetchall() if row[0]]
+            
+        elif column == 'type':
+            # Usually static, but can fetch from DB
+            query = "SELECT DISTINCT type FROM indicators WHERE type LIKE ? ORDER BY type LIMIT ?"
+            cursor = db.execute(query, (search_param, limit))
+            results = [row[0] for row in cursor.fetchall()]
+            
+        # Tags are application logic, difficult to query DISTINCT from DB without a tag table.
+        # We can skip tag autocomplete or return hardcoded common tags.
+        
+        return results

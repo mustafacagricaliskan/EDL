@@ -33,26 +33,54 @@ logger.setLevel(logging.INFO)
 
 
 def _cleanup_whitelisted_items_from_db():
+    """
+    Optimized: Removes whitelisted items from the database.
+    Uses SQL for exact matches and iterator for CIDR checks to save memory.
+    """
     whitelist_db_items = get_whitelist()
-    whitelist_filters = [w['item'] for w in whitelist_db_items]
-
-    if not whitelist_filters:
+    if not whitelist_db_items:
         return
 
-    all_current_indicators_dict = get_all_indicators()
-    indicators_to_delete = []
+    # 1. Exact Match Cleanup (Fast SQL)
+    # Extract exact items (no slash)
+    exact_items = [w['item'] for w in whitelist_db_items if '/' not in w['item']]
+    if exact_items:
+        # DB delete in chunks to avoid too many SQL variables
+        chunk_size = 900
+        for i in range(0, len(exact_items), chunk_size):
+            chunk = exact_items[i:i + chunk_size]
+            db_delete_whitelisted_indicators(chunk)
 
-    for indicator, data in all_current_indicators_dict.items():
-        # Check against whitelist using universal function
-        whitelisted, _ = is_whitelisted(indicator, whitelist_filters)
+    # 2. CIDR Match Cleanup (Iterative)
+    # Only need to iterate if we have CIDRs in whitelist
+    cidr_filters = [w['item'] for w in whitelist_db_items if '/' in w['item']]
+    if not cidr_filters:
+        return
+
+    # Use iterator to avoid loading 1M+ items into RAM dict
+    indicators_to_delete = []
+    # We only need the indicator string for checking
+    # get_all_indicators_iter yields rows, row['indicator'] is what we need
+    
+    # Pre-compile whitelist logic
+    # We can pass cidr_filters to is_whitelisted but it expects the full list usually.
+    # Let's optimize is_whitelisted usage here or re-implement for speed.
+    
+    count = 0
+    for row in get_all_indicators_iter():
+        indicator = row['indicator']
+        # Check only against CIDRs since exacts are done
+        whitelisted, _ = is_whitelisted(indicator, cidr_filters)
         if whitelisted:
             indicators_to_delete.append(indicator)
-
+            
+        if len(indicators_to_delete) >= 1000:
+            db_delete_whitelisted_indicators(indicators_to_delete)
+            indicators_to_delete = []
+            
+    # Final flush
     if indicators_to_delete:
-        chunk_size = 900
-        for i in range(0, len(indicators_to_delete), chunk_size):
-            chunk = indicators_to_delete[i:i + chunk_size]
-            db_delete_whitelisted_indicators(chunk)
+        db_delete_whitelisted_indicators(indicators_to_delete)
 
 
 def regenerate_edl_files():

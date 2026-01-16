@@ -8,6 +8,8 @@
     <link href="{{ url_for('static', filename='vendor/css/bootstrap.min.css') }}" rel="stylesheet">
     <!-- FontAwesome -->
     <link href="{{ url_for('static', filename='vendor/css/fontawesome.min.css') }}" rel="stylesheet">
+    <!-- DataTables CSS -->
+    <link href="{{ url_for('static', filename='vendor/css/dataTables.bootstrap5.min.css') }}" rel="stylesheet">
     <!-- SweetAlert2 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/sweetalert2.min.css') }}">
     <!-- Theme CSS -->
@@ -74,6 +76,7 @@
             <small class="text-info opacity-75">Intelligence Engine</small>
         </div>
         <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if request.endpoint == 'dashboard.index' }}"><i class="fas fa-th-large"></i> Overview</a>
+        <a href="{{ url_for('analysis.index') }}" class="{{ 'active' if request.endpoint and 'analysis' in request.endpoint }}"><i class="fas fa-chart-pie"></i> Risk Analysis</a>
         <a href="{{ url_for('tools.investigate') }}" class="{{ 'active' if request.endpoint == 'tools.investigate' }}"><i class="fas fa-search-location"></i> IP Investigation</a>
         <a href="{{ url_for('system.index') }}" class="{{ 'active' if request.endpoint == 'system.index' }}"><i class="fas fa-cog"></i> System Settings</a>
         
@@ -100,7 +103,10 @@
     </div>
 
     <!-- Scripts -->
+    <script src="{{ url_for('static', filename='vendor/js/jquery.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/js/jquery.dataTables.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/js/dataTables.bootstrap5.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/js/sweetalert2.all.min.js') }}"></script>
     <script>
         // Common Flash Messages

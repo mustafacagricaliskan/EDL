@@ -94,12 +94,14 @@ generate_self_signed_cert()
 # Register Blueprints
 from .routes import bp_api, bp_auth, bp_dashboard, bp_system
 from .routes.tools import bp_tools
+from .routes.analysis import bp_analysis
 
 app.register_blueprint(bp_dashboard)
 app.register_blueprint(bp_api) # Prefix /api
 app.register_blueprint(bp_auth)
 app.register_blueprint(bp_system)
 app.register_blueprint(bp_tools)
+app.register_blueprint(bp_analysis)
 
 # Special Route handling to keep /status and /run compatible with existing JS
 # Or we can simply add alias routes here

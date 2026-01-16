@@ -37,7 +37,10 @@ from .repositories.indicator_repo import (
     get_filtered_indicators_iter,
     clean_database_vacuum,
     get_source_counts,
-    get_sources_for_indicator
+    get_sources_for_indicator,
+    get_indicators_paginated,
+    get_sources_for_indicators_batch,
+    get_filter_options
 )
 from .repositories.job_repo import (
     clear_job_history,

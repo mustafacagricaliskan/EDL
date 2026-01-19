@@ -36,14 +36,29 @@ def get_all_custom_lists(conn=None):
         cursor = db.execute('SELECT * FROM custom_lists ORDER BY created_at DESC')
         results = []
         for row in cursor:
+            sources = json.loads(row['sources'])
+            
+            # Calculate total indicators for this list
+            indicator_count = 0
+            if sources:
+                placeholders = ','.join(['?'] * len(sources))
+                count_cursor = db.execute(f'''
+                    SELECT COUNT(DISTINCT i.indicator)
+                    FROM indicators i
+                    JOIN indicator_sources s ON i.indicator = s.indicator
+                    WHERE s.source_name IN ({placeholders})
+                ''', sources)
+                indicator_count = count_cursor.fetchone()[0]
+
             results.append({
                 'id': row['id'],
                 'name': row['name'],
                 'token': row['token'],
-                'sources': json.loads(row['sources']),
+                'sources': sources,
                 'types': json.loads(row['types']),
                 'format': row['format'],
-                'created_at': row['created_at']
+                'created_at': row['created_at'],
+                'indicator_count': indicator_count
             })
         logger.info(f"Retrieved {len(results)} custom lists.")
         return results
@@ -67,6 +82,10 @@ def get_custom_list_by_token(token, conn=None):
 def delete_custom_list(list_id, conn=None):
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
-            db.execute('DELETE FROM custom_lists WHERE id = ?', (list_id,))
-            db.commit()
-            return True
+            try:
+                db.execute('DELETE FROM custom_lists WHERE id = ?', (list_id,))
+                db.commit()
+                return True
+            except Exception as e:
+                logger.error(f"Error deleting custom list {list_id}: {e}")
+                return False

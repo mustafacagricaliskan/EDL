@@ -125,12 +125,13 @@
                                                     <input type="text" class="form-control" style="font-size: 0.7rem;" value="{{ url_for('api.get_saved_custom_edl', token=list.token, _external=True) }}" readonly id="list_url_{{ list.id }}">
                                                     <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('list_url_{{ list.id }}')"><i class="fas fa-copy"></i></button>
                                                 </div>
-                                                <div class="mt-1 text-muted" style="font-size: 0.65rem;">
-                                                    Fmt: {{ list.format }} | Src: {{ list.sources|length }}
-                                                </div>
-                                            </div>
-                                            {% endfor %}
-                                        </div>
+                                                                                                    <div class="mt-1 text-muted" style="font-size: 0.65rem;">
+                                                                                                        Fmt: {{ list.format }} | Src: {{ list.sources|length }} | Items: {{ list.indicator_count }}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                {% endfor %}
+                                                                                            </div>
+                                                
                                     {% else %}
                                         <p class="text-center text-muted small my-3">No custom lists saved.</p>
                                     {% endif %}

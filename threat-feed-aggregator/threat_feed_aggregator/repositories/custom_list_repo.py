@@ -36,29 +36,16 @@ def get_all_custom_lists(conn=None):
         cursor = db.execute('SELECT * FROM custom_lists ORDER BY created_at DESC')
         results = []
         for row in cursor:
-            sources = json.loads(row['sources'])
-            
-            # Calculate total indicators for this list
-            indicator_count = 0
-            if sources:
-                placeholders = ','.join(['?'] * len(sources))
-                count_cursor = db.execute(f'''
-                    SELECT COUNT(DISTINCT i.indicator)
-                    FROM indicators i
-                    JOIN indicator_sources s ON i.indicator = s.indicator
-                    WHERE s.source_name IN ({placeholders})
-                ''', sources)
-                indicator_count = count_cursor.fetchone()[0]
-
+            # Optimization: Don't calculate counts here. Fetch via AJAX.
             results.append({
                 'id': row['id'],
                 'name': row['name'],
                 'token': row['token'],
-                'sources': sources,
+                'sources': json.loads(row['sources']),
                 'types': json.loads(row['types']),
                 'format': row['format'],
                 'created_at': row['created_at'],
-                'indicator_count': indicator_count
+                'indicator_count': None 
             })
         logger.info(f"Retrieved {len(results)} custom lists.")
         return results
@@ -89,3 +76,30 @@ def delete_custom_list(list_id, conn=None):
             except Exception as e:
                 logger.error(f"Error deleting custom list {list_id}: {e}")
                 return False
+
+def get_custom_list_count(list_id, conn=None):
+    """
+    Calculates the indicator count for a specific custom list.
+    """
+    with db_transaction(conn) as db:
+        cursor = db.execute('SELECT sources FROM custom_lists WHERE id = ?', (list_id,))
+        row = cursor.fetchone()
+        if not row: return 0
+        
+        sources = json.loads(row['sources'])
+        if not sources: return 0
+        
+        if len(sources) == 1:
+            count_cursor = db.execute(
+                'SELECT COUNT(*) FROM indicator_sources WHERE source_name = ?', 
+                (sources[0],)
+            )
+        else:
+            placeholders = ','.join(['?'] * len(sources))
+            count_cursor = db.execute(f'''
+                SELECT COUNT(DISTINCT indicator)
+                FROM indicator_sources
+                WHERE source_name IN ({placeholders})
+            ''', sources)
+            
+        return count_cursor.fetchone()[0]

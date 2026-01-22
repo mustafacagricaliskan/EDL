@@ -88,16 +88,45 @@
             </div>
         </div>
 
-        <!-- Side Tools -->
-        <div class="col-md-4">
-            <div class="card settings-card shadow-sm mb-4 border-0">
-                <div class="card-header bg-white py-3 border-0"><h6 class="fw-bold mb-0 text-dark"><i class="fas fa-file-export me-2 text-warning"></i>Output Lists (EDL)</h6></div>
-                <div class="card-body pt-0">
-                    <div class="d-grid gap-2 mb-3">
-                        <a href="{{ url_for('dashboard.download_file', filename='palo_alto_edl.txt') }}" class="btn btn-outline-dark text-start p-2 small d-flex justify-content-between"><span>Palo Alto Networks</span><i class="fas fa-download"></i></a>
-                        <a href="{{ url_for('dashboard.download_file', filename='fortinet_edl.txt') }}" class="btn btn-outline-dark text-start p-2 small d-flex justify-content-between"><span>Fortinet FortiGate</span><i class="fas fa-download"></i></a>
-                    </div>
-                    <h6 class="form-label-custom small fw-bold mb-2">Custom EDL Manager</h6>
+                    <!-- Side Tools -->
+
+                    <div class="col-md-4">
+
+                        <div class="card settings-card shadow-sm mb-4 border-0">
+
+                            <div class="card-header bg-white py-3 border-0"><h6 class="fw-bold mb-0 text-dark"><i class="fas fa-file-export me-2 text-warning"></i>Output Lists (EDL)</h6></div>
+
+                            <div class="card-body pt-0">
+
+                                <div class="mb-3">
+
+                                    <label class="small text-muted mb-1 fw-bold">Palo Alto Networks</label>
+
+                                    <div class="btn-group w-100 mb-2">
+
+                                        <a href="{{ url_for('dashboard.download_file', filename='palo_alto_ip.txt') }}" class="btn btn-outline-dark btn-sm w-50"><i class="fas fa-network-wired me-1"></i>IP List</a>
+
+                                        <a href="{{ url_for('dashboard.download_file', filename='palo_alto_domain.txt') }}" class="btn btn-outline-dark btn-sm w-50"><i class="fas fa-globe me-1"></i>Domain List</a>
+
+                                    </div>
+
+                                    
+
+                                    <label class="small text-muted mb-1 fw-bold">Fortinet FortiGate</label>
+
+                                    <div class="btn-group w-100">
+
+                                        <a href="{{ url_for('dashboard.download_file', filename='fortinet_ip.txt') }}" class="btn btn-outline-dark btn-sm w-50"><i class="fas fa-network-wired me-1"></i>IP List</a>
+
+                                        <a href="{{ url_for('dashboard.download_file', filename='fortinet_domain.txt') }}" class="btn btn-outline-dark btn-sm w-50"><i class="fas fa-globe me-1"></i>Domain List</a>
+
+                                    </div>
+
+                                </div>
+
+                                <h6 class="form-label-custom small fw-bold mb-2">Custom EDL Manager</h6>
+
+        
                     <div class="card border mb-3">
                         <div class="card-header bg-light p-1">
                             <ul class="nav nav-tabs card-header-tabs m-0 small" id="edlTabs" role="tablist">
@@ -125,13 +154,12 @@
                                                     <input type="text" class="form-control" style="font-size: 0.7rem;" value="{{ url_for('api.get_saved_custom_edl', token=list.token, _external=True) }}" readonly id="list_url_{{ list.id }}">
                                                     <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('list_url_{{ list.id }}')"><i class="fas fa-copy"></i></button>
                                                 </div>
-                                                                                                    <div class="mt-1 text-muted" style="font-size: 0.65rem;">
-                                                                                                        Fmt: {{ list.format }} | Src: {{ list.sources|length }} | Items: {{ list.indicator_count }}
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                                {% endfor %}
-                                                                                            </div>
-                                                
+                                                <div class="mt-1 text-muted" style="font-size: 0.65rem;">
+                                                    Fmt: {{ list.format }} | Src: {{ list.sources|length }} | Items: <span class="list-count" data-id="{{ list.id }}">...</span>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
                                     {% else %}
                                         <p class="text-center text-muted small my-3">No custom lists saved.</p>
                                     {% endif %}
@@ -147,11 +175,13 @@
                                         <div class="mb-2">
                                             <label class="small text-muted mb-1">Content Type</label><br>
                                             <div class="btn-group w-100" role="group">
-                                                <input type="checkbox" class="btn-check" name="type_ip" id="type_ip" checked>
+                                                <input type="radio" class="btn-check" name="content_type" id="type_ip" value="ip" checked>
                                                 <label class="btn btn-outline-primary btn-xs" for="type_ip">IP/CIDR</label>
-                                                <input type="checkbox" class="btn-check" name="type_domain" id="type_domain">
+                                                
+                                                <input type="radio" class="btn-check" name="content_type" id="type_domain" value="domain">
                                                 <label class="btn btn-outline-primary btn-xs" for="type_domain">Domain</label>
-                                                <input type="checkbox" class="btn-check" name="type_url" id="type_url">
+                                                
+                                                <input type="radio" class="btn-check" name="content_type" id="type_url" value="url">
                                                 <label class="btn btn-outline-primary btn-xs" for="type_url">URL</label>
                                             </div>
                                         </div>
@@ -467,26 +497,32 @@
     
     <script>
         window.AppConfig = {
-            csrfToken: "{{ csrf_token() }}",
             urls: {
                 addSource: "{{ url_for('system.add_source') }}",
                 addWhitelist: "{{ url_for('system.add_whitelist') }}",
-                addBlacklist: "{{ url_for('system.add_blacklist') }}"
+                addBlacklist: "{{ url_for('system.add_blacklist') }}" 
             },
             sourceUrls: {{ urls|tojson }},
+            csrfToken: "{{ csrf_token() }}",
+            flashMessages: {{ get_flashed_messages(with_categories=true)|tojson }},
             countryStats: {
-                {% for c in country_stats %} "{{ c.country_code }}": {{ c.count }}, {% endfor %}
-            },
-            flashMessages: [
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                  {% if messages %}
-                    {% for category, message in messages %}
-                      { category: {{ category|tojson }}, message: {{ message|tojson }} },
-                    {% endfor %}
-                  {% endif %}
-                {% endwith %}
-            ]
+                {% for c in country_stats %}
+                "{{ c.country_code }}": {{ c.count }},
+                {% endfor %}
+            }
         };
+
+        // Fetch Custom List Counts
+        document.addEventListener('DOMContentLoaded', function() {
+            const counters = document.querySelectorAll('.list-count');
+            counters.forEach(span => {
+                const id = span.getAttribute('data-id');
+                fetch(`/api/custom_list/count/${id}`)
+                    .then(r => r.json())
+                    .then(data => { span.textContent = data.count; })
+                    .catch(() => { span.textContent = '?'; });
+            });
+        });
     </script>
     <script src="{{ url_for('static', filename='js/dashboard.js', v=2) }}"></script>
 {% endblock %}

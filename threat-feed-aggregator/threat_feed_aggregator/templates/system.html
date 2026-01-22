@@ -486,11 +486,37 @@
         profiles.forEach(p => pCards += `<div class="col-6"><input type="radio" class="btn-check" name="mapProfile" id="p_${p.id}" value="${p.id}"><label class="btn btn-outline-secondary btn-sm w-100 p-3 text-start" for="p_${p.id}"><div class="fw-bold">${p.name}</div></label></div>`);
         pCards += '</div>';
         Swal.fire({
-            title: 'Link LDAP Group to Profile',
-            html: `<div class="text-start mb-3"><label class="form-label small fw-bold">LDAP Group DN</label><input type="text" id="groupDn" class="form-control" placeholder="CN=Admins,OU=Groups,DC=local"></div><div class="text-start"><label class="form-label small fw-bold">Select Profile</label>${pCards}</div>`,
-            width: '600px', showCancelButton: true, confirmButtonText: 'Link',
-            preConfirm: () => { const dn = document.getElementById('groupDn').value; const pid = document.querySelector('input[name="mapProfile"]:checked')?.value; if (!dn || !pid) Swal.showValidationMessage(`Required`); return { group_dn: dn, profile_id: pid }; }
-        }).then(res => { if (res.isConfirmed) submitForm('{{ url_for("system.add_ldap_mapping") }}', res.value); });
+            title: 'Add LDAP Group Mapping',
+            html: `
+                <div class="text-start mb-3">
+                    <label class="form-label small fw-bold">LDAP Group DN (Full Path)</label>
+                    <input type="text" id="groupDn" class="form-control" placeholder="CN=Threat_Admins,OU=Groups,DC=mfa,DC=gov,DC=tr">
+                    <small class="text-muted">Enter the full Distinguished Name of the LDAP group.</small>
+                </div>
+                <div class="text-start">
+                    <label class="form-label small fw-bold">Assign Application Profile</label>
+                    ${pCards}
+                    <small class="text-muted d-block mt-2">Users in this LDAP group will inherit the selected permissions.</small>
+                </div>
+            `,
+            width: '600px',
+            showCancelButton: true,
+            confirmButtonText: '<i class="fas fa-plus me-1"></i> Add Mapping',
+            confirmButtonColor: '#4f46e5',
+            preConfirm: () => {
+                const dn = document.getElementById('groupDn').value;
+                const pid = document.querySelector('input[name="mapProfile"]:checked')?.value;
+                if (!dn || !pid) {
+                    Swal.showValidationMessage(`Please enter Group DN and select a profile`);
+                    return false;
+                }
+                return { group_dn: dn, profile_id: pid };
+            }
+        }).then(res => {
+            if (res.isConfirmed) {
+                submitForm('{{ url_for("system.add_ldap_mapping") }}', res.value);
+            }
+        });
     }
 
     function showProfileModal(profile = null) {
@@ -517,14 +543,81 @@
         let pOptions = ''; profiles.forEach(p => pOptions += `<option value="${p.id}">${p.name}</option>`);
         Swal.fire({
             title: 'Add Account',
-            html: `<div class="text-start mb-2"><label class="small fw-bold">User</label><input type="text" id="newU" class="form-control"></div><div class="text-start mb-2"><label class="small fw-bold">Pass</label><input type="password" id="newP" class="form-control"></div><div class="text-start"><label class="small fw-bold">Profile</label><select id="newPr" class="form-select">${pOptions}</select></div>`,
-            confirmButtonText: 'Add', showCancelButton: true,
-            preConfirm: () => { const u=document.getElementById('newU').value; const p=document.getElementById('newP').value; const pid=document.getElementById('newPr').value; if(!u||!p) Swal.showValidationMessage(`Required`); return { username:u, password:p, profile_id:pid }; }
-        }).then(res => { if (res.isConfirmed) submitForm('{{ url_for("system.add_user") }}', res.value); });
+            html: `
+                <div class="text-start mb-2">
+                    <label class="small fw-bold">User</label>
+                    <input type="text" id="newU" class="form-control">
+                </div>
+                <div class="text-start mb-2">
+                    <label class="small fw-bold">Password</label>
+                    <input type="password" id="newP" class="form-control">
+                </div>
+                <div class="text-start mb-2">
+                    <label class="small fw-bold">Confirm Password</label>
+                    <input type="password" id="confirmP" class="form-control">
+                </div>
+                <div class="text-start">
+                    <label class="small fw-bold">Profile</label>
+                    <select id="newPr" class="form-select">${pOptions}</select>
+                </div>
+            `,
+            confirmButtonText: 'Add', 
+            showCancelButton: true,
+            preConfirm: () => { 
+                const u = document.getElementById('newU').value; 
+                const p = document.getElementById('newP').value; 
+                const cp = document.getElementById('confirmP').value;
+                const pid = document.getElementById('newPr').value; 
+                
+                if(!u || !p || !cp) {
+                    Swal.showValidationMessage(`All fields are required`);
+                    return false;
+                }
+                if(p !== cp) {
+                    Swal.showValidationMessage(`Passwords do not match`);
+                    return false;
+                }
+                return { username:u, password:p, profile_id:pid }; 
+            }
+        }).then(res => { 
+            if (res.isConfirmed) submitForm('{{ url_for("system.add_user") }}', res.value); 
+        });
     }
 
     function showChangePasswordModal(u) {
-        Swal.fire({ title: `Reset ${u}`, input: 'password', showCancelButton: true }).then(res => { if (res.isConfirmed) submitForm('{{ url_for("system.change_user_password") }}', { username: u, password: res.value }); });
+        Swal.fire({
+            title: `Reset Password for ${u}`,
+            html: `
+                <div class="text-start mb-2">
+                    <label class="form-label small fw-bold">New Password</label>
+                    <input type="password" id="newPass" class="form-control" placeholder="Enter new password">
+                </div>
+                <div class="text-start">
+                    <label class="form-label small fw-bold">Confirm New Password</label>
+                    <input type="password" id="confirmPass" class="form-control" placeholder="Re-enter new password">
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Change Password',
+            preConfirm: () => {
+                const p1 = document.getElementById('newPass').value;
+                const p2 = document.getElementById('confirmPass').value;
+                
+                if (!p1 || !p2) {
+                    Swal.showValidationMessage('Please fill out both fields');
+                    return false;
+                }
+                if (p1 !== p2) {
+                    Swal.showValidationMessage('Passwords do not match!');
+                    return false;
+                }
+                return { password: p1 };
+            }
+        }).then(res => {
+            if (res.isConfirmed) {
+                submitForm('{{ url_for("system.change_user_password") }}', { username: u, password: res.value.password });
+            }
+        });
     }
 
     function checkLdapServerStatus() { fetch('/system/ldap/status').then(r => r.json()).then(d => { const b = document.getElementById('ldapServerStatus'); b.className = 'badge rounded-pill badge-authority ' + (d.status === 'online' ? 'bg-success' : (d.status === 'offline' ? 'bg-danger' : 'bg-secondary')); b.innerHTML = d.status.toUpperCase(); }); }

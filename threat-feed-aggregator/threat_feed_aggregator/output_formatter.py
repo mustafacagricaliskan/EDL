@@ -73,6 +73,28 @@ def format_for_palo_alto(indicator_dict):
 
     return "\n".join(aggregated_items)
 
+def format_for_palo_alto_domain(indicator_dict):
+    """
+    Formats dictionary for Palo Alto Domain List EDL.
+    Includes 'domain' and 'url' types.
+    """
+    items = []
+    for indicator, details in indicator_dict.items():
+        if details.get('type') in ['domain', 'url']:
+            items.append(indicator)
+    return "\n".join(items)
+
+def format_for_fortinet_domain(indicator_dict):
+    """
+    Formats dictionary for Fortinet Domain List EDL.
+    Includes 'domain' and 'url' types.
+    """
+    items = []
+    for indicator, details in indicator_dict.items():
+        if details.get('type') in ['domain', 'url']:
+            items.append(indicator)
+    return "\n".join(items)
+
 def format_for_fortinet(indicator_dict):
     """
     Formats a dictionary of indicators (from get_all_indicators) for Fortinet Fabric Connector.

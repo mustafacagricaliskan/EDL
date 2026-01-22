@@ -1,27 +1,34 @@
 import json
 import logging
 
-from ..database.connection import DB_WRITE_LOCK, db_transaction
+from ..database.connection import DB_WRITE_LOCK, db_transaction, DB_TYPE
 
 logger = logging.getLogger(__name__)
 
 def init_db(conn=None):
-    with DB_WRITE_LOCK:
-        with db_transaction(conn) as db:
-            try:
-                # 1. Indicators Table (Expanded)
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS indicators (
-                        indicator TEXT PRIMARY KEY,
-                        last_seen TEXT NOT NULL,
-                        country TEXT,
-                        type TEXT NOT NULL DEFAULT 'ip',
-                        risk_score INTEGER DEFAULT 50, -- New: Risk Score
-                        source_count INTEGER DEFAULT 1 -- New: Source Count
-                    )
-                ''')
+    logger.info("Starting init_db...")
+    
+    with db_transaction(conn) as db:
+        try:
+            logger.info("Creating tables...")
+            pk_def = "INTEGER PRIMARY KEY AUTOINCREMENT"
+            if DB_TYPE == 'postgres':
+                pk_def = "SERIAL PRIMARY KEY"
 
-                # Schema Migration for existing tables
+            # 1. Indicators Table
+            db.execute(f'''
+                CREATE TABLE IF NOT EXISTS indicators (
+                    indicator TEXT PRIMARY KEY,
+                    last_seen TEXT NOT NULL,
+                    country TEXT,
+                    type TEXT NOT NULL DEFAULT 'ip',
+                    risk_score INTEGER DEFAULT 50, 
+                    source_count INTEGER DEFAULT 1
+                )
+            ''')
+            logger.info("Table indicators checked.")
+
+            if DB_TYPE == 'sqlite':
                 cursor = db.execute("PRAGMA table_info(indicators)")
                 columns = [info[1] for info in cursor.fetchall()]
                 if 'country' not in columns: db.execute('ALTER TABLE indicators ADD COLUMN country TEXT')
@@ -29,149 +36,181 @@ def init_db(conn=None):
                 if 'risk_score' not in columns: db.execute("ALTER TABLE indicators ADD COLUMN risk_score INTEGER DEFAULT 50")
                 if 'source_count' not in columns: db.execute("ALTER TABLE indicators ADD COLUMN source_count INTEGER DEFAULT 1")
 
-                # 2. Indicator Sources Table (New: Many-to-Many Relationship)
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS indicator_sources (
-                        indicator TEXT,
-                        source_name TEXT,
-                        last_seen TEXT,
-                        PRIMARY KEY (indicator, source_name),
-                        FOREIGN KEY(indicator) REFERENCES indicators(indicator) ON DELETE CASCADE
-                    )
-                ''')
+            # 2. Indicator Sources Table
+            db.execute('''
+                CREATE TABLE IF NOT EXISTS indicator_sources (
+                    indicator TEXT,
+                    source_name TEXT,
+                    last_seen TEXT,
+                    PRIMARY KEY (indicator, source_name),
+                    FOREIGN KEY(indicator) REFERENCES indicators(indicator) ON DELETE CASCADE
+                )
+            ''')
+            logger.info("Table indicator_sources checked.")
 
-                # Indexes for Performance
-                db.execute('CREATE INDEX IF NOT EXISTS idx_indicators_type ON indicators(type)')
-                db.execute('CREATE INDEX IF NOT EXISTS idx_indicator_sources_name_seen ON indicator_sources(source_name, last_seen)')
+            # Indexes commented out here - moved to create_indexes_safely
+            # db.execute('CREATE INDEX IF NOT EXISTS idx_indicators_type ON indicators(type)')
+            # ...
 
-                # Whitelist Table
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS whitelist (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        item TEXT NOT NULL UNIQUE,
-                        description TEXT,
-                        added_at TEXT NOT NULL
-                    )
-                ''')
+            # Whitelist Table
+            db.execute(f'''
+                CREATE TABLE IF NOT EXISTS whitelist (
+                    id {pk_def},
+                    item TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    added_at TEXT NOT NULL
+                )
+            ''')
 
-                # API Blacklist Table (For SOAR Integration)
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS api_blacklist (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        item TEXT NOT NULL UNIQUE,
-                        type TEXT NOT NULL DEFAULT 'ip',
-                        comment TEXT,
-                        added_at TEXT NOT NULL
-                    )
-                ''')
+            # API Blacklist Table
+            db.execute(f'''
+                CREATE TABLE IF NOT EXISTS api_blacklist (
+                    id {pk_def},
+                    item TEXT NOT NULL UNIQUE,
+                    type TEXT NOT NULL DEFAULT 'ip',
+                    comment TEXT,
+                    added_at TEXT NOT NULL
+                )
+            ''')
 
-                # Users Table
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS users (
-                        username TEXT PRIMARY KEY,
-                        password_hash TEXT NOT NULL,
-                        profile_id INTEGER DEFAULT 1,
-                        mfa_secret TEXT -- New: TOTP Secret
-                    )
-                ''')
+            # Users Table
+            db.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    username TEXT PRIMARY KEY,
+                    password_hash TEXT NOT NULL,
+                    profile_id INTEGER DEFAULT 1,
+                    mfa_secret TEXT
+                )
+            ''')
 
-                # Job History Table
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS job_history (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        source_name TEXT NOT NULL,
-                        start_time TEXT NOT NULL,
-                        end_time TEXT,
-                        status TEXT NOT NULL, 
-                        items_processed INTEGER DEFAULT 0,
-                        message TEXT
-                    )
-                ''')
+            # Job History Table
+            db.execute(f'''
+                CREATE TABLE IF NOT EXISTS job_history (
+                    id {pk_def},
+                    source_name TEXT NOT NULL,
+                    start_time TEXT NOT NULL,
+                    end_time TEXT,
+                    status TEXT NOT NULL, 
+                    items_processed INTEGER DEFAULT 0,
+                    message TEXT
+                )
+            ''')
 
-                # Stats History Table (New for Trend Graphs)
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS stats_history (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        timestamp TEXT NOT NULL,
-                        total_indicators INTEGER,
-                        ip_count INTEGER,
-                        domain_count INTEGER,
-                        url_count INTEGER
-                    )
-                ''')
+            # Stats History Table
+            db.execute(f'''
+                CREATE TABLE IF NOT EXISTS stats_history (
+                    id {pk_def},
+                    timestamp TEXT NOT NULL,
+                    total_indicators INTEGER,
+                    ip_count INTEGER,
+                    domain_count INTEGER,
+                    url_count INTEGER
+                )
+            ''')
 
-                # Custom EDL Lists Table (New for Saved Lists)
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS custom_lists (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        token TEXT NOT NULL UNIQUE,
-                        sources TEXT NOT NULL, -- JSON list
-                        types TEXT NOT NULL,   -- JSON list
-                        format TEXT NOT NULL DEFAULT 'text',
-                        created_at TEXT NOT NULL
-                    )
-                ''')
+            # Custom EDL Lists
+            db.execute(f'''
+                CREATE TABLE IF NOT EXISTS custom_lists (
+                    id {pk_def},
+                    name TEXT NOT NULL,
+                    token TEXT NOT NULL UNIQUE,
+                    sources TEXT NOT NULL, 
+                    types TEXT NOT NULL,   
+                    format TEXT NOT NULL DEFAULT 'text',
+                    created_at TEXT NOT NULL
+                )
+            ''')
 
-                # --- Admin Profiles (RBAC) ---
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS admin_profiles (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL UNIQUE,
-                        description TEXT,
-                        permissions TEXT NOT NULL -- JSON string: {"module": "access_level"}
-                    )
-                ''')
+            # Admin Profiles
+            db.execute(f'''
+                CREATE TABLE IF NOT EXISTS admin_profiles (
+                    id {pk_def},
+                    name TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    permissions TEXT NOT NULL
+                )
+            ''')
 
-                # --- LDAP Group Mappings ---
-                db.execute('''
-                    CREATE TABLE IF NOT EXISTS ldap_group_mappings (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        group_dn TEXT NOT NULL UNIQUE,
-                        profile_id INTEGER NOT NULL,
-                        FOREIGN KEY(profile_id) REFERENCES admin_profiles(id) ON DELETE CASCADE
-                    )
-                ''')
+            # LDAP Group Mappings
+            db.execute(f'''
+                CREATE TABLE IF NOT EXISTS ldap_group_mappings (
+                    id {pk_def},
+                    group_dn TEXT NOT NULL UNIQUE,
+                    profile_id INTEGER NOT NULL,
+                    FOREIGN KEY(profile_id) REFERENCES admin_profiles(id) ON DELETE CASCADE
+                )
+            ''')
 
-                # Seed Default Profiles FIRST (to satisfy FK constraints when migrating users)
-                cursor = db.execute("SELECT COUNT(*) FROM admin_profiles")
-                if cursor.fetchone()[0] == 0:
-                    # 1. Super_User (Full Access)
-                    db.execute('INSERT INTO admin_profiles (name, description, permissions) VALUES (?, ?, ?)',
-                               ('Super_User', 'Full access to all modules', json.dumps({
-                                   "dashboard": "rw", "system": "rw", "tools": "rw"
-                               })))
-                    # 2. Standard_User (Limited System Access)
-                    db.execute('INSERT INTO admin_profiles (name, description, permissions) VALUES (?, ?, ?)',
-                               ('Standard_User', 'Can manage feeds but not system settings', json.dumps({
-                                   "dashboard": "rw", "system": "r", "tools": "rw"
-                               })))
-                    # 3. Read_Only (View Only)
-                    db.execute('INSERT INTO admin_profiles (name, description, permissions) VALUES (?, ?, ?)',
-                               ('Read_Only', 'View access only', json.dumps({
-                                   "dashboard": "r", "system": "r", "tools": "r"
-                               })))
+            # DNS Resolution Cache
+            db.execute('''
+                CREATE TABLE IF NOT EXISTS dns_resolution_cache (
+                    domain TEXT PRIMARY KEY,
+                    resolved_ips TEXT,
+                    last_resolved TEXT
+                )
+            ''')
+            # Index moved to create_indexes_safely
+            logger.info("All tables checked.")
 
-                # Users Table Migration
+            # Seed Default Profiles
+            count_query = "SELECT COUNT(*) FROM admin_profiles"
+            cursor = db.execute(count_query)
+            if cursor.fetchone()[0] == 0:
+                insert_cmd = 'INSERT INTO admin_profiles (name, description, permissions) VALUES (?, ?, ?)'
+                if DB_TYPE == 'postgres':
+                    insert_cmd = insert_cmd.replace('?', '%s')
+                
+                db.execute(insert_cmd,
+                           ('Super_User', 'Full access to all modules', json.dumps({
+                               "dashboard": "rw", "system": "rw", "tools": "rw"
+                           })))
+                db.execute(insert_cmd,
+                           ('Standard_User', 'Can manage feeds but not system settings', json.dumps({
+                               "dashboard": "rw", "system": "r", "tools": "rw"
+                           })))
+                db.execute(insert_cmd,
+                           ('Read_Only', 'View access only', json.dumps({
+                               "dashboard": "r", "system": "r", "tools": "r"
+                           })))
+
+            # Users Table Migration logic (SQLite only)
+            if DB_TYPE == 'sqlite':
                 cursor = db.execute("PRAGMA table_info(users)")
                 user_columns = [info[1] for info in cursor.fetchall()]
                 
-                # Migrate: profile_id
                 if 'profile_id' not in user_columns:
                     try:
                         db.execute('ALTER TABLE users ADD COLUMN profile_id INTEGER DEFAULT 1')
+                        db.execute("UPDATE users SET profile_id = 1 WHERE username = 'admin'")
                     except Exception as ex:
                         logger.error(f"Migration error (profile_id): {ex}")
-                    # Ensure admin has correct profile
-                    db.execute("UPDATE users SET profile_id = 1 WHERE username = 'admin'")
 
-                # Migrate: mfa_secret
                 if 'mfa_secret' not in user_columns:
                     try:
                         db.execute('ALTER TABLE users ADD COLUMN mfa_secret TEXT')
                     except Exception as ex:
                         logger.error(f"Migration error (mfa_secret): {ex}")
 
-                db.commit()
-            except Exception as e:
-                logger.error(f"Error initializing database: {e}")
+        except Exception as e:
+            logger.error(f"Error initializing database: {e}")
+
+def create_indexes_safely(conn=None):
+    """
+    Creates indexes. Designed to be run in a background thread to avoid blocking startup.
+    """
+    logger.info("Starting background index creation/verification...")
+    with db_transaction(conn) as db:
+        try:
+            # Indexes for Indicators
+            db.execute('CREATE INDEX IF NOT EXISTS idx_indicators_type ON indicators(type)')
+            db.execute('CREATE INDEX IF NOT EXISTS idx_indicators_country ON indicators(country)')
+            
+            # Indexes for Sources
+            db.execute('CREATE INDEX IF NOT EXISTS idx_indicator_sources_name_seen ON indicator_sources(source_name, last_seen)')
+            
+            # Indexes for DNS Cache
+            db.execute('CREATE INDEX IF NOT EXISTS idx_dns_cache_last_resolved ON dns_resolution_cache(last_resolved)')
+            
+            logger.info("Background index creation completed.")
+        except Exception as e:
+            logger.error(f"Error creating indexes: {e}")

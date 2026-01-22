@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import threading
+import time
 import zipfile
 from datetime import datetime
 
@@ -11,6 +12,7 @@ from flask import flash, jsonify, redirect, request, send_file, url_for, Respons
 from ..aggregator import fetch_and_process_single_feed, regenerate_edl_files, run_aggregator, test_feed_source
 from ..scheduler_manager import scheduler, update_scheduled_jobs
 from ..azure_services import process_azure_feeds
+from ..microsoft_services import process_microsoft_feeds
 from ..config_manager import DATA_DIR, read_config, read_stats
 from ..db_manager import (
     add_api_blacklist_item,
@@ -26,55 +28,109 @@ from ..db_manager import (
     get_all_indicators_iter,
     get_filtered_indicators_iter,
     get_custom_list_by_token,
+    get_custom_list_count,
 )
 from ..github_services import process_github_feeds
 from ..log_manager import clear_logs, get_live_logs
-from ..microsoft_services import process_microsoft_feeds
-from ..output_formatter import format_generic
-from ..services.job_service import job_service
 from ..utils import add_to_safe_list, format_timestamp, remove_from_safe_list, validate_indicator
+from ..services.job_service import job_service
 from . import bp_api
 from .auth import api_key_required, login_required
 
 logger = logging.getLogger(__name__)
 
+CACHE_DIR = os.path.join(DATA_DIR, 'edl_cache')
+if not os.path.exists(CACHE_DIR):
+    os.makedirs(CACHE_DIR)
+
+def _get_cached_edl_path(token, fmt):
+    return os.path.join(CACHE_DIR, f"{token}.{fmt}")
+
+def _is_cache_valid(path, ttl_seconds=600):
+    if not os.path.exists(path):
+        return False
+    mtime = os.stat(path).st_mtime
+    age = time.time() - mtime
+    return age < ttl_seconds
+
+@bp_api.route('/custom_list/count/<int:list_id>')
+@login_required
+def custom_list_count_api(list_id):
+    """Returns the item count for a custom list."""
+    count = get_custom_list_count(list_id)
+    return jsonify({'count': count})
 
 @bp_api.route('/edl/custom/<token>')
 def get_saved_custom_edl(token):
     """
     Returns a saved custom EDL by its token.
-    No Authentication required (Token is the secret).
+    Uses file-based caching (10 mins) and streaming for performance.
     """
     list_config = get_custom_list_by_token(token)
     if not list_config:
         return jsonify({'error': 'List not found'}), 404
 
+    output_format = list_config['format']
+    cache_path = _get_cached_edl_path(token, output_format)
+
+    # 1. Serve from Cache if valid
+    if _is_cache_valid(cache_path):
+        return send_file(cache_path, mimetype='text/plain' if output_format == 'text' else f'text/{output_format}')
+
+    # 2. Regenerate Cache (Streaming)
     include_sources = list_config['sources']
     include_types = list_config['types']
-    output_format = list_config['format']
     
-    # Fetch Data
-    iterator = get_filtered_indicators_iter(include_sources)
-    
-    indicators_data = {row['indicator']: {
-            'last_seen': row['last_seen'],
-            'country': row['country'],
-            'type': row['type'],
-            'risk_score': row['risk_score']
-        } for row in iterator}
-    
-    if not indicators_data:
-        logger.warning(f"Custom EDL ({token}) returned 0 records. Sources: {include_sources}")
+    try:
+        iterator = get_filtered_indicators_iter(include_sources)
         
-    output = format_generic(indicators_data, include_types, output_format, '\n')
-    
-    mimetype = 'text/plain'
-    if output_format == 'json':
-        mimetype = 'application/json'
-    elif output_format == 'csv':
-        mimetype = 'text/csv'
+        # Write to temporary file then rename (atomic-ish)
+        temp_path = cache_path + ".tmp"
+        
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            if output_format == 'text':
+                # Optimized Stream for Text
+                count = 0
+                for row in iterator:
+                    if not include_types or row['type'] in include_types:
+                        f.write(row['indicator'] + '\n')
+                        count += 1
+                if count == 0:
+                    logger.warning(f"Custom EDL ({token}) generated 0 records.")
+            else:
+                # Fallback for CSV/JSON (requires list structure usually)
+                # But we can optimize CSV streaming
+                if output_format == 'csv':
+                    import csv
+                    writer = csv.writer(f)
+                    writer.writerow(['indicator', 'type', 'risk_score', 'country'])
+                    for row in iterator:
+                        if not include_types or row['type'] in include_types:
+                            writer.writerow([row['indicator'], row['type'], row['risk_score'], row['country']])
+                elif output_format == 'json':
+                    # JSON requires loading all to dump list, or complex streaming
+                    # For now, load to memory for JSON
+                    import json
+                    data = []
+                    for row in iterator:
+                        if not include_types or row['type'] in include_types:
+                            data.append({
+                                'indicator': row['indicator'],
+                                'type': row['type'],
+                                'risk_score': row['risk_score'],
+                                'country': row['country']
+                            })
+                    json.dump(data, f, indent=2)
 
-    return Response(output, mimetype=mimetype)
+        # Move temp file to cache path
+        import shutil
+        shutil.move(temp_path, cache_path)
+        
+        return send_file(cache_path, mimetype='text/plain' if output_format == 'text' else f'text/{output_format}')
+
+    except Exception as e:
+        logger.error(f"Error generating Custom EDL {token}: {e}")
+        return jsonify({'error': 'Generation failed'}), 500
 
 
 @bp_api.route('/edl/generic')

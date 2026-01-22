@@ -4,7 +4,7 @@ import sqlite3
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..database.connection import DB_WRITE_LOCK, db_transaction
+from ..database.connection import DB_WRITE_LOCK, db_transaction, DB_TYPE
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +14,14 @@ def set_admin_password(password, conn=None):
         with db_transaction(conn) as db:
             try:
                 hashed_password = generate_password_hash(password)
-                db.execute('INSERT OR REPLACE INTO users (username, password_hash) VALUES (?, ?)',
-                             ('admin', hashed_password))
+                if DB_TYPE == 'postgres':
+                    db.execute('''
+                        INSERT INTO users (username, password_hash) VALUES (%s, %s)
+                        ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash
+                    ''', ('admin', hashed_password))
+                else:
+                    db.execute('INSERT OR REPLACE INTO users (username, password_hash) VALUES (?, ?)',
+                                 ('admin', hashed_password))
                 db.commit()
                 return True, "Admin password set/updated."
             except Exception as e:

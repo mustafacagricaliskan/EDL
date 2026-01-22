@@ -1,9 +1,36 @@
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 
-from ..database.connection import DB_WRITE_LOCK, db_transaction
+from ..database.connection import DB_WRITE_LOCK, db_transaction, DB_TYPE
 
 logger = logging.getLogger(__name__)
+
+# --- CACHING LOGIC ---
+_STATS_CACHE = {}
+_STATS_CACHE_TTL = 300  # 5 minutes
+
+def invalidate_stats_cache():
+    """Invalidates the in-memory stats cache."""
+    global _STATS_CACHE
+    _STATS_CACHE.clear()
+    logger.debug("Stats cache invalidated.")
+
+def _get_cached_stat(key, fetch_func, *args, **kwargs):
+    """Helper to get a stat from cache or fetch it."""
+    global _STATS_CACHE
+    now = time.time()
+    
+    # Check cache
+    if key in _STATS_CACHE:
+        val, timestamp = _STATS_CACHE[key]
+        if now - timestamp < _STATS_CACHE_TTL:
+            return val
+    
+    # Cache miss
+    val = fetch_func(*args, **kwargs)
+    _STATS_CACHE[key] = (val, now)
+    return val
 
 # --- SCORING & UPSERT LOGIC ---
 
@@ -12,34 +39,135 @@ def upsert_indicators_bulk(indicators, source_name="Unknown", conn=None):
     Highly optimized bulk upsert with scoring logic.
     indicators: list of (indicator, country, type)
     """
-    with DB_WRITE_LOCK:
-        with db_transaction(conn) as db:
-            try:
-                now_iso = datetime.now(UTC).isoformat()
+    # Deduplicate input list based on indicator (tuple[0]) to avoid "ON CONFLICT DO UPDATE command cannot affect row a second time"
+    # Keep the last occurrence
+    unique_indicators_map = {item[0]: item for item in indicators}
+    deduplicated_indicators = list(unique_indicators_map.values())
 
-                # Speed Optimization: Use a temporary table for bulk operations
-                db.execute('CREATE TEMPORARY TABLE IF NOT EXISTS temp_bulk_indicators (indicator TEXT, country TEXT, type TEXT)')
-                db.execute('DELETE FROM temp_bulk_indicators')
+    with db_transaction(conn) as db:
+        try:
+            now_iso = datetime.now(UTC).isoformat()
 
-                db.executemany('INSERT INTO temp_bulk_indicators VALUES (?, ?, ?)', indicators)
+            # Speed Optimization: Use a temporary table for bulk operations
+            db.execute('CREATE TEMPORARY TABLE IF NOT EXISTS temp_bulk_indicators (indicator TEXT, country TEXT, type TEXT)')
+            db.execute('DELETE FROM temp_bulk_indicators')
 
-                # Step 1: Bulk Upsert into main indicators table
-                # Using INSERT OR REPLACE for compatibility with older SQLite versions
+            # The wrapper will handle ? -> %s conversion
+            db.executemany('INSERT INTO temp_bulk_indicators VALUES (?, ?, ?)', deduplicated_indicators)
+
+            # Step 1: Bulk Upsert into main indicators table
+            if DB_TYPE == 'postgres':
+                # Postgres UPSERT
+                db.execute('''
+                    INSERT INTO indicators (indicator, last_seen, country, type, risk_score, source_count)
+                    SELECT indicator, %s, country, type, 50, 1 FROM temp_bulk_indicators
+                    ON CONFLICT (indicator) 
+                    DO UPDATE SET last_seen = EXCLUDED.last_seen
+                ''', (now_iso,))
+            else:
+                # SQLite UPSERT (INSERT OR REPLACE)
                 db.execute('''
                     INSERT OR REPLACE INTO indicators (indicator, last_seen, country, type, risk_score, source_count)
                     SELECT indicator, ?, country, type, 50, 1 FROM temp_bulk_indicators
                 ''', (now_iso,))
 
-                # Step 2: Bulk Update indicator_sources
+            # Step 2: Bulk Update indicator_sources
+            if DB_TYPE == 'postgres':
+                db.execute('''
+                    INSERT INTO indicator_sources (indicator, source_name, last_seen)
+                    SELECT indicator, %s, %s FROM temp_bulk_indicators
+                    ON CONFLICT (indicator, source_name) 
+                    DO UPDATE SET last_seen = EXCLUDED.last_seen
+                ''', (source_name, now_iso))
+            else:
                 db.execute('''
                     INSERT OR REPLACE INTO indicator_sources (indicator, source_name, last_seen)
                     SELECT indicator, ?, ? FROM temp_bulk_indicators
                 ''', (source_name, now_iso))
 
+            db.commit()
+            invalidate_stats_cache() # Invalidate cache on update
+        except Exception as e:
+            logger.error(f"Error bulk upserting indicators: {e}")
+            raise
+
+# ...
+
+def recalculate_scores(source_confidence_map=None, conn=None, target_source=None):
+    """
+    Optimized: Recalculates risk scores.
+    If target_source is provided, only updates indicators associated with that source.
+    """
+    if source_confidence_map is None:
+        source_confidence_map = {}
+
+    with DB_WRITE_LOCK:
+        with db_transaction(conn) as db:
+            try:
+                # ... (part 1 & 2 same) ...
+                # 1. Update source_count accurately
+                count_where_clause = ""
+                count_params = []
+                if target_source:
+                    count_where_clause = "WHERE indicators.indicator IN (SELECT indicator FROM indicator_sources WHERE source_name = ?)"
+                    count_params = [target_source]
+
+                db.execute(f'''
+                    UPDATE indicators
+                    SET source_count = (
+                        SELECT COUNT(*) 
+                        FROM indicator_sources 
+                        WHERE indicator_sources.indicator = indicators.indicator
+                    )
+                    {count_where_clause}
+                ''', count_params)
+
+                # 2. Use a temporary table for confidence scores
+                db.execute('CREATE TEMPORARY TABLE IF NOT EXISTS temp_source_conf (name TEXT PRIMARY KEY, score INTEGER)')
+                db.execute('DELETE FROM temp_source_conf')
+
+                data_to_insert = [(name, score) for name, score in source_confidence_map.items()]
+                if data_to_insert:
+                    db.executemany('INSERT INTO temp_source_conf VALUES (?, ?)', data_to_insert)
+
+                # 3. Optimized calculation
+                score_where_clause = "WHERE EXISTS (SELECT 1 FROM indicator_sources WHERE indicator = indicators.indicator)"
+                score_params = []
+                if target_source:
+                    score_where_clause = "WHERE indicators.indicator IN (SELECT indicator FROM indicator_sources WHERE source_name = ?)"
+                    score_params = [target_source]
+
+                # Handle DB differences for MIN/MAX vs LEAST/GREATEST
+                if DB_TYPE == 'postgres':
+                    # Postgres uses LEAST/GREATEST
+                    score_calc = "LEAST(100, GREATEST(COALESCE(sc.score, 50), 0) + ((indicators.source_count - 1) * 5))"
+                else:
+                    # SQLite uses MIN/MAX with multiple args
+                    score_calc = "MIN(100, MAX(COALESCE(sc.score, 50)) + ((indicators.source_count - 1) * 5))"
+
+                query = f'''
+                    UPDATE indicators
+                    SET risk_score = (
+                        SELECT {score_calc}
+                        FROM indicator_sources src
+                        LEFT JOIN temp_source_conf sc ON src.source_name = sc.name
+                        WHERE src.indicator = indicators.indicator
+                    )
+                    {score_where_clause}
+                '''
+                
+                # Replace ? with %s if postgres (handled by wrapper usually but this is f-string)
+                # Actually wrapper handles execute params, but this query has no params in the subquery logic
+                # Only score_params for WHERE clause.
+                
+                db.execute(query, score_params)
+
                 db.commit()
+                invalidate_stats_cache()
+                logger.info(f"Scores recalculated efficiently ({'Target: ' + target_source if target_source else 'Full'}).")
             except Exception as e:
-                logger.error(f"Error bulk upserting indicators: {e}")
-                raise
+                logger.error(f"Error recalculating scores: {e}")
+                db.rollback()
 
 def clean_database_vacuum(conn=None):
     """Performs VACUUM to shrink DB size and optimize indexes."""
@@ -123,18 +251,29 @@ def recalculate_scores(source_confidence_map=None, conn=None, target_source=None
                     score_where_clause = "WHERE indicators.indicator IN (SELECT indicator FROM indicator_sources WHERE source_name = ?)"
                     score_params = [target_source]
 
-                db.execute(f'''
+                # Handle DB differences for MIN/MAX vs LEAST/GREATEST
+                if DB_TYPE == 'postgres':
+                    # Postgres uses LEAST/GREATEST. We aggregate MAX(sc.score) to handle multiple sources per indicator.
+                    score_calc = "LEAST(100, GREATEST(MAX(COALESCE(sc.score, 50)), 0) + ((indicators.source_count - 1) * 5))"
+                else:
+                    # SQLite uses MIN/MAX with multiple args
+                    score_calc = "MIN(100, MAX(MAX(COALESCE(sc.score, 50))) + ((indicators.source_count - 1) * 5))"
+
+                query = f'''
                     UPDATE indicators
                     SET risk_score = (
-                        SELECT MIN(100, MAX(COALESCE(sc.score, 50)) + ((indicators.source_count - 1) * 5))
+                        SELECT {score_calc}
                         FROM indicator_sources src
                         LEFT JOIN temp_source_conf sc ON src.source_name = sc.name
                         WHERE src.indicator = indicators.indicator
                     )
                     {score_where_clause}
-                ''', score_params)
+                '''
+                
+                db.execute(query, score_params)
 
                 db.commit()
+                invalidate_stats_cache()
                 logger.info(f"Scores recalculated efficiently ({'Target: ' + target_source if target_source else 'Full'}).")
             except Exception as e:
                 logger.error(f"Error recalculating scores: {e}")
@@ -188,6 +327,7 @@ def remove_old_indicators(source_retention_map=None, default_retention_days=30, 
 
                 if total_deleted_sources > 0 or orphans_deleted > 0:
                     db.commit()
+                    invalidate_stats_cache()
                     logger.info(f"Cleanup: Removed {total_deleted_sources} expired source links and {orphans_deleted} orphaned indicators.")
 
                 return orphans_deleted
@@ -195,7 +335,7 @@ def remove_old_indicators(source_retention_map=None, default_retention_days=30, 
                 logger.error(f"Error removing old indicators: {e}")
                 return 0
 
-def get_unique_indicator_count(indicator_type=None, conn=None):
+def _fetch_unique_indicator_count(indicator_type, conn):
     with db_transaction(conn) as db:
         if indicator_type:
             cursor = db.execute('SELECT COUNT(*) FROM indicators WHERE type = ?', (indicator_type,))
@@ -203,12 +343,19 @@ def get_unique_indicator_count(indicator_type=None, conn=None):
             cursor = db.execute('SELECT COUNT(*) FROM indicators')
         return cursor.fetchone()[0]
 
-def get_indicator_counts_by_type(conn=None):
+def get_unique_indicator_count(indicator_type=None, conn=None):
+    key = f"unique_count_{indicator_type}"
+    return _get_cached_stat(key, _fetch_unique_indicator_count, indicator_type, conn)
+
+def _fetch_indicator_counts_by_type(conn):
     with db_transaction(conn) as db:
         cursor = db.execute('SELECT type, COUNT(*) as count FROM indicators GROUP BY type')
         return {row['type']: row['count'] for row in cursor.fetchall()}
 
-def get_country_stats(conn=None):
+def get_indicator_counts_by_type(conn=None):
+    return _get_cached_stat("counts_by_type", _fetch_indicator_counts_by_type, conn)
+
+def _fetch_country_stats(conn):
     with db_transaction(conn) as db:
         try:
             cursor = db.execute('''
@@ -217,12 +364,15 @@ def get_country_stats(conn=None):
                 WHERE type = 'ip'
                 GROUP BY country_code 
                 ORDER BY count DESC
-                LIMIT 10
+                LIMIT 250
             ''')
             return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
             logger.error(f"Error getting country stats: {e}")
             return []
+
+def get_country_stats(conn=None):
+    return _get_cached_stat("country_stats", _fetch_country_stats, conn)
 
 def save_historical_stats(conn=None):
     """Captures current stats and saves to history."""
@@ -497,3 +647,109 @@ def get_filter_options(column, search_term=None, limit=20, conn=None):
         # We can skip tag autocomplete or return hardcoded common tags.
         
         return results
+
+# --- DNS RESOLUTION CACHE LOGIC ---
+
+def get_domains_for_resolution(limit=100, retry_days=7, conn=None):
+    """
+    Fetches domains that are either not in the cache or have expired cache entries.
+    """
+    with db_transaction(conn) as db:
+        cutoff_date = (datetime.now(UTC) - timedelta(days=retry_days)).isoformat()
+        
+        # We want domains from 'indicators' table that need resolution
+        # 1. Not in cache
+        # 2. OR In cache but old
+        # AND type is domain or url
+        
+        query = '''
+            SELECT i.indicator, i.type 
+            FROM indicators i
+            LEFT JOIN dns_resolution_cache c ON i.indicator = c.domain
+            WHERE (i.type = 'domain' OR i.type = 'url')
+            AND (c.domain IS NULL OR c.last_resolved < ?)
+            LIMIT ?
+        '''
+        
+        cursor = db.execute(query, (cutoff_date, limit))
+        return [{'indicator': row['indicator'], 'type': row['type']} for row in cursor.fetchall()]
+
+def update_dns_cache_batch(results, conn=None):
+    """
+    Updates the DNS resolution cache with new results.
+    results: list of {'domain': str, 'resolved_ips': str, 'last_resolved': str}
+    """
+    with db_transaction(conn) as db:
+        query = '''
+            INSERT INTO dns_resolution_cache (domain, resolved_ips, last_resolved)
+            VALUES (?, ?, ?)
+            ON CONFLICT(domain) DO UPDATE SET
+                resolved_ips = excluded.resolved_ips,
+                last_resolved = excluded.last_resolved
+        '''
+        
+        data = [(r['domain'], r['resolved_ips'], r['last_resolved']) for r in results]
+        
+        if DB_TYPE == 'postgres':
+            # Adapt query for postgres syntax if needed (usually %s vs ?)
+            # But the wrapper might handle it. If not, we use the standard 'replace' logic of upsert_indicators_bulk
+             query = '''
+                INSERT INTO dns_resolution_cache (domain, resolved_ips, last_resolved)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (domain) DO UPDATE SET
+                    resolved_ips = EXCLUDED.resolved_ips,
+                    last_resolved = EXCLUDED.last_resolved
+            '''
+        
+        db.executemany(query, data)
+        db.commit()
+
+def get_dns_resolution_cache_iter(conn=None):
+    """
+    Yields (domain, resolved_ips) from the cache table.
+    """
+    with db_transaction(conn) as db:
+        cursor = db.execute('SELECT domain, resolved_ips FROM dns_resolution_cache')
+        for row in cursor:
+            yield row
+
+def delete_indicators(indicators_list, conn=None):
+    """
+    Deletes a list of indicators from the database.
+    """
+    if not indicators_list:
+        return 0
+        
+    with DB_WRITE_LOCK:
+        with db_transaction(conn) as db:
+            placeholders = ','.join(['?'] * len(indicators_list))
+            
+            # 1. Delete from indicator_sources
+            db.execute(f"DELETE FROM indicator_sources WHERE indicator IN ({placeholders})", indicators_list)
+            
+            # 2. Delete from indicators
+            cursor = db.execute(f"DELETE FROM indicators WHERE indicator IN ({placeholders})", indicators_list)
+            
+            db.commit()
+            invalidate_stats_cache()
+            return cursor.rowcount
+
+def get_existing_ips(ip_list, conn=None):
+    """
+    Checks which IPs from the provided list exist in the database.
+    Returns a set of existing IPs.
+    """
+    if not ip_list:
+        return set()
+        
+    with db_transaction(conn) as db:
+        # Batch checks to avoid huge SQL queries
+        existing = set()
+        chunk_size = 900
+        for i in range(0, len(ip_list), chunk_size):
+            chunk = ip_list[i:i+chunk_size]
+            placeholders = ','.join(['?'] * len(chunk))
+            cursor = db.execute(f"SELECT indicator FROM indicators WHERE type='ip' AND indicator IN ({placeholders})", chunk)
+            existing.update(row['indicator'] for row in cursor.fetchall())
+            
+        return existing

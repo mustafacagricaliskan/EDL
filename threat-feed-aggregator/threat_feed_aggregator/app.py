@@ -1,5 +1,6 @@
 import logging
 import os
+import redis
 
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -12,6 +13,7 @@ from .azure_services import process_azure_feeds
 from .cert_manager import generate_self_signed_cert, get_ca_bundle_path, get_cert_paths
 from .config_manager import DATA_DIR, read_config
 from .db_manager import get_admin_password_hash, init_db, set_admin_password
+from .database.schema import create_indexes_safely
 from .github_services import process_github_feeds
 from .log_manager import setup_memory_logging
 from .microsoft_services import process_microsoft_feeds
@@ -28,7 +30,36 @@ if custom_ca_bundle:
     os.environ['SSL_CERT_FILE'] = custom_ca_bundle
     logging.info(f"Using custom CA bundle at: {custom_ca_bundle}")
 
+from flask import Flask, request, g
+import time
+import threading
+
+# ... (existing imports)
+
 app = Flask(__name__)
+
+# Background Thread for DB Optimization (Index Creation)
+def run_db_optimization():
+    time.sleep(10) # Wait 10s for Gunicorn to fully bind and app to settle
+    logging.info("Triggering background DB optimization...")
+    try:
+        create_indexes_safely()
+    except Exception as e:
+        logging.error(f"DB Optimization failed: {e}")
+
+threading.Thread(target=run_db_optimization, daemon=True).start()
+
+@app.before_request
+def start_timer():
+    g.start = time.time()
+
+@app.after_request
+def log_request(response):
+    if hasattr(g, 'start'):
+        diff = time.time() - g.start
+        if diff > 0.5: # Log slow requests > 500ms
+            logging.warning(f"SLOW REQUEST: {request.method} {request.path} took {diff:.4f}s")
+    return response
 
 # Context processor to make version available to all templates
 @app.context_processor
@@ -58,9 +89,16 @@ def from_json_filter(value):
 csrf = CSRFProtect(app)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
-# Session Configuration (Filesystem for Multi-Worker Support)
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_FILE_DIR'] = os.path.join(DATA_DIR, 'flask_session')
+# Session Configuration
+if os.environ.get('REDIS_HOST'):
+    logging.info(f"Using Redis Session Interface ({os.environ['REDIS_HOST']})")
+    app.config['SESSION_TYPE'] = 'redis'
+    app.config['SESSION_REDIS'] = redis.from_url(f"redis://{os.environ['REDIS_HOST']}:{os.environ.get('REDIS_PORT', 6379)}")
+else:
+    logging.info("Using Filesystem Session Interface")
+    app.config['SESSION_TYPE'] = 'filesystem'
+    app.config['SESSION_FILE_DIR'] = os.path.join(DATA_DIR, 'flask_session')
+
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_COOKIE_SECURE'] = False 

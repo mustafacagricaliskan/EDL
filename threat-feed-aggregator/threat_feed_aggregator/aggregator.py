@@ -23,7 +23,13 @@ from .db_manager import (
     get_source_counts,
 )
 from .geoip_manager import get_country_code
-from .output_formatter import format_for_fortinet, format_for_palo_alto, format_for_url_list
+from .output_formatter import (
+    format_for_fortinet, 
+    format_for_palo_alto, 
+    format_for_url_list,
+    format_for_palo_alto_domain,
+    format_for_fortinet_domain
+)
 from .parsers import get_parser
 from .services.job_service import job_service
 from .utils import is_whitelisted
@@ -33,10 +39,6 @@ logger.setLevel(logging.INFO)
 
 
 def _cleanup_whitelisted_items_from_db():
-    """
-    Optimized: Removes whitelisted items from the database.
-    Uses SQL for exact matches and iterator for CIDR checks to save memory.
-    """
     whitelist_db_items = get_whitelist()
     if not whitelist_db_items:
         return
@@ -116,14 +118,33 @@ def regenerate_edl_files():
             else:
                 indicators_data[ind]['risk_score'] = 100
 
+        # --- Palo Alto ---
+        # IP List
         palo_alto_output = format_for_palo_alto(indicators_data)
         with open(os.path.join(DATA_DIR, "palo_alto_edl.txt"), "w") as f:
             f.write(palo_alto_output)
+        with open(os.path.join(DATA_DIR, "palo_alto_ip.txt"), "w") as f:
+            f.write(palo_alto_output)
+            
+        # Domain List
+        palo_alto_domain = format_for_palo_alto_domain(indicators_data)
+        with open(os.path.join(DATA_DIR, "palo_alto_domain.txt"), "w") as f:
+            f.write(palo_alto_domain)
 
+        # --- Fortinet ---
+        # IP List
         fortinet_output = format_for_fortinet(indicators_data)
         with open(os.path.join(DATA_DIR, "fortinet_edl.txt"), "w") as f:
             f.write(fortinet_output)
+        with open(os.path.join(DATA_DIR, "fortinet_ip.txt"), "w") as f:
+            f.write(fortinet_output)
+            
+        # Domain List
+        fortinet_domain = format_for_fortinet_domain(indicators_data)
+        with open(os.path.join(DATA_DIR, "fortinet_domain.txt"), "w") as f:
+            f.write(fortinet_domain)
 
+        # --- Generic URL List ---
         url_list_output = format_for_url_list(indicators_data)
         with open(os.path.join(DATA_DIR, "url_list.txt"), "w") as f:
             f.write(url_list_output)

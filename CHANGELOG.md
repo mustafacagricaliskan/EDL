@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.15.0] - 2026-01-22
+
+### Added
+- **DNS Deduplication V2:** Re-architected for performance using background batch processing and database caching to prevent network floods.
+- **UI Improvements:** Modernized DNS Deduplication dashboard with live logs, improved settings layout, and real-time status.
+- **Security:** Added "Confirm Password" validation field for local user creation and password changes.
+
+### Fixed
+- **Startup:** Resolved container startup hang caused by synchronous DB index creation on large tables; moved index creation to background thread.
+- **Azure:** Fixed SSL certificate verification error during Azure feed downloads (bypassed verification for compatibility).
+- **LDAP:** Fixed invalid server address error by ensuring container uses internal DNS servers.
+- **System:** Fixed CSRF token missing error in Group Mapping forms by implementing global token handling.
+- **Core:** Fixed missing imports in API routes causing failures in Microsoft 365 feed updates.
+
 ## [1.14.1] - 2026-01-16
 
 ### Fixed

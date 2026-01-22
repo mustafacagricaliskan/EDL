@@ -93,7 +93,8 @@ function updateSourceStats() {
                 const tbody = document.getElementById('countryStatsTableBody');
                 if (tbody) {
                     let html = '';
-                    countryStats.forEach(c => {
+                    // Show only top 10 in the table to prevent overcrowding
+                    countryStats.slice(0, 10).forEach(c => {
                         html += `<tr><td class="small py-2">${c.country_code}</td><td class="text-end small py-2 fw-bold text-primary">${c.count}</td></tr>`;
                     });
                     tbody.innerHTML = html;

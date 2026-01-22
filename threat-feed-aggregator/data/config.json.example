@@ -9,6 +9,14 @@
         }
     ],
     "indicator_lifetime_days": 30,
+    "dns_dedup_schedule": {
+        "enabled": false,
+        "interval_minutes": 10,
+        "start_time": "00:00",
+        "end_time": "23:59",
+        "batch_size": 50,
+        "auto_delete": true
+    },
     "api_key": "CHANGE_ME_TO_A_SECURE_RANDOM_STRING",
     "auth": {
         "ldap": {

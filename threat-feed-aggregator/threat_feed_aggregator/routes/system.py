@@ -46,11 +46,20 @@ def add_custom_list_route():
     # If types are sent as comma separated string "ip,domain" or array
     types_input = request.form.get('types') # If hidden input
     if not types_input:
-        # Check individual checkboxes if not sent as one field
+        # Check for radio button selection
+        content_type = request.form.get('content_type')
         types = []
-        if request.form.get('type_ip'): types.extend(['ip', 'cidr'])
-        if request.form.get('type_domain'): types.append('domain')
-        if request.form.get('type_url'): types.append('url')
+        if content_type == 'ip':
+            types.extend(['ip', 'cidr'])
+        elif content_type == 'domain':
+            types.append('domain')
+        elif content_type == 'url':
+            types.append('url')
+        else:
+            # Fallback for API or legacy calls
+            if request.form.get('type_ip'): types.extend(['ip', 'cidr'])
+            if request.form.get('type_domain'): types.append('domain')
+            if request.form.get('type_url'): types.append('url')
     else:
         types = types_input.split(',')
 
@@ -95,15 +104,25 @@ def index():
 @bp_system.route('/ldap/mappings/add', methods=['POST'])
 @login_required
 def add_ldap_mapping():
+    import logging
+    logger = logging.getLogger(__name__)
+    
     group_dn = request.form.get('group_dn')
     profile_id = request.form.get('profile_id', type=int)
+    
+    logger.info(f"Attempting to add LDAP mapping - Group: {group_dn}, Profile ID: {profile_id}")
 
     if group_dn and profile_id:
         success, message = add_ldap_group_mapping(group_dn, profile_id)
         if success:
+            logger.info("LDAP mapping added successfully.")
             flash('LDAP Mapping added successfully.', 'success')
         else:
+            logger.error(f"Failed to add LDAP mapping: {message}")
             flash(f'Error adding mapping: {message}', 'danger')
+    else:
+        logger.warning("Missing group_dn or profile_id in form data.")
+        flash('Missing required fields.', 'danger')
 
     return redirect(url_for('system.index'))
 

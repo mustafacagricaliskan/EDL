@@ -40,7 +40,12 @@ from .repositories.indicator_repo import (
     get_sources_for_indicator,
     get_indicators_paginated,
     get_sources_for_indicators_batch,
-    get_filter_options
+    get_filter_options,
+    get_domains_for_resolution,
+    update_dns_cache_batch,
+    delete_indicators,
+    get_existing_ips,
+    get_dns_resolution_cache_iter
 )
 from .repositories.job_repo import (
     clear_job_history,
@@ -62,7 +67,8 @@ from .repositories.custom_list_repo import (
     create_custom_list,
     get_all_custom_lists,
     get_custom_list_by_token,
-    delete_custom_list
+    delete_custom_list,
+    get_custom_list_count
 )
 from .database.schema import init_db
 from .database.connection import db_transaction, get_db_connection

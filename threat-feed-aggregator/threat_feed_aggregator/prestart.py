@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from threat_feed_aggregator.cert_manager import get_cert_paths, generate_self_signed_cert
-from threat_feed_aggregator.app import init_db
+from threat_feed_aggregator.db_manager import init_db
 
 # Configure minimal logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

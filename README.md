@@ -1,7 +1,7 @@
 # 🛡️ Threat Feed Aggregator
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.11.0-blue?style=for-the-badge" alt="Version 1.11.0">
+  <img src="https://img.shields.io/badge/Version-1.15.0-blue?style=for-the-badge" alt="Version 1.15.0">
   <img src="https://img.shields.io/badge/Python-3.13+-green?style=for-the-badge&logo=python" alt="Python 3.13+">
   <img src="https://img.shields.io/badge/Flask-3.0-lightgrey?style=for-the-badge&logo=flask" alt="Flask 3.0">
   <img src="https://img.shields.io/badge/Docker-Ready-cyan?style=for-the-badge&logo=docker" alt="Docker Ready">
@@ -23,6 +23,7 @@
 ## ✨ Key Features
 
 ### 🧠 Intelligence Engine
+- **DNS Deduplication V2:** Re-architected for high-performance. Automatically resolves domains in background batches and removes those pointing to already-blocked IPs.
 - **Generic EDL Builder:** Generate custom lists on-the-fly with selectable types (IP/Domain) and formats (Text/CSV/JSON) via GUI or API.
 - **Authenticated Feeds:** Fetch data from premium sources requiring HTTP Basic Authentication.
 - **CIDR Aggregation:** Automatically merges contiguous IP addresses and overlapping subnets into optimal CIDR blocks.
@@ -30,14 +31,16 @@
 - **Auto-Retention:** Granular, per-source aging policies to keep your blocklists fresh and relevant.
 
 ### 📊 Real-Time Dashboard
+- **Modern DNS Dedup UI:** Dedicated manager with live operational logs, real-time status, and batch processing controls.
 - **Live Terminal:** High-performance operational logs with smart filtering (Hide heartbeats/static assets).
 - **Dynamic Stats:** AJAX-driven summary cards and activity history—no refresh required.
 - **Visual Distribution:** Interactive world map visualizing the geographical origin of threat indicators.
 
 ### 🏢 Enterprise Readiness
+- **Background DB Optimization:** Non-blocking asynchronous index creation ensures fast startup even with millions of records.
 - **Multi-Factor Auth (MFA):** TOTP-based 2FA (Google/Microsoft Authenticator) for local accounts.
 - **Advanced RBAC:** Role-Based Access Control with custom permission profiles (Read/Write/None).
-- **LDAP/AD Integration:** Native Active Directory support with Group-to-Profile mapping.
+- **LDAP/AD Integration:** Native Active Directory support with Group-to-Profile mapping and internal DNS server configuration.
 - **Secure Infrastructure:** Support for System-wide Proxies, custom Root CAs, and high-security SSL configurations.
 - **Multi-Client API:** Unique API keys for SOAR/SIEM consumers with Trusted Host (IP) enforcement.
 
@@ -53,14 +56,14 @@ The fastest way to get up and running is using Docker Compose.
 
 ```bash
 # Clone the repository
-git clone https://github.com/gokaycagri/EDL.git
+git clone https://github.com/mustafacagricaliskan/EDL.git
 cd EDL
 
 # Start the environment
 docker-compose up -d --build
 ```
 - **Dashboard:** `https://localhost`
-- **Default Credentials:** `admin` / `change_me_please`
+- **Default Credentials:** `admin` / `123456` (Change via .env)
 
 ### 2. Local Python Setup
 ```bash
@@ -88,34 +91,17 @@ The platform is designed to be "Config-via-GUI" first. Navigate to **System Sett
 - **General:** Timezone, global retention, and threat sources.
 - **Network:** Centralized Proxy and custom DNS servers.
 - **Auth:** LDAP server clusters and AD group mapping.
-- **Security:** SSL Certificate management and System Backups.
-
-> [!IMPORTANT]  
-> **Security Update (v1.11.0):** Now runs on **Gunicorn** by default for production-grade security and concurrency.
-
----
-
-## 🧪 Testing
-
-We maintain high code quality with a comprehensive test suite.
-
-```bash
-# Run all 60+ unit and integration tests
-pytest threat-feed-aggregator/tests/
-```
-
-Our CI pipeline automatically validates every commit on **GitHub Actions** using Python 3.13.
+- **Security:** SSL Certificate management, password complexity, and System Backups.
 
 ---
 
 ## 🏗 Architecture (Clean Code)
 
 - **Production Server:** **Gunicorn** (WSGI) with 4 workers and automated SSL certificate generation.
-- **Session Management:** Server-side filesystem sessions (`Flask-Session`) for reliable multi-worker persistence.
+- **Session Management:** Redis-backed sessions (if configured) or server-side filesystem sessions.
 - **Asynchronous Core:** Uses `asyncio` and `aiohttp` for high-speed concurrent feed fetching.
-- **Repository Pattern:** Database logic is decoupled into domain-specific repositories.
-- **Service Layer:** Business logic is isolated from web routes for modularity and testability.
-- **Database:** SQLite with **WAL Mode** enabled for concurrent read/write performance.
+- **Database:** **PostgreSQL** (Production Recommended) or SQLite with WAL Mode enabled.
+- **Optimization:** Background threading for heavy DB maintenance tasks to ensure zero-downtime availability.
 
 ---
 

@@ -57,10 +57,23 @@ def init_db(conn=None):
                 CREATE TABLE IF NOT EXISTS whitelist (
                     id {pk_def},
                     item TEXT NOT NULL UNIQUE,
+                    type TEXT NOT NULL DEFAULT 'ip',
                     description TEXT,
                     added_at TEXT NOT NULL
                 )
             ''')
+
+            # Migration for Whitelist (Add 'type' column if missing)
+            if DB_TYPE == 'sqlite':
+                cursor = db.execute("PRAGMA table_info(whitelist)")
+                columns = [info[1] for info in cursor.fetchall()]
+                if 'type' not in columns: db.execute("ALTER TABLE whitelist ADD COLUMN type TEXT NOT NULL DEFAULT 'ip'")
+            else:
+                # Postgres Column Checks (Attempt add and ignore error)
+                try:
+                    db.execute('ALTER TABLE whitelist ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT \'ip\'')
+                except:
+                    pass
 
             # API Blacklist Table
             db.execute(f'''

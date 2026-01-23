@@ -131,15 +131,28 @@ def get_user_mfa_secret(username, conn=None):
         return result['mfa_secret'] if result else None
 
 def update_user_mfa_secret(username, secret, conn=None):
-    """Updates (enables) or clears (disables) the MFA secret."""
+    """Updates (enables) or clears (disables) the MFA secret. Handles Upsert for LDAP users."""
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
-                db.execute('UPDATE users SET mfa_secret = ? WHERE username = ?', (secret, username))
+                if DB_TYPE == 'postgres':
+                    db.execute('''
+                        INSERT INTO users (username, password_hash, mfa_secret)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (username) DO UPDATE SET mfa_secret = EXCLUDED.mfa_secret
+                    ''', (username, 'LDAP_USER', secret))
+                else:
+                    # Check if user exists
+                    cursor = db.execute("SELECT 1 FROM users WHERE username = ?", (username,))
+                    if cursor.fetchone():
+                        db.execute('UPDATE users SET mfa_secret = ? WHERE username = ?', (secret, username))
+                    else:
+                        db.execute('INSERT INTO users (username, password_hash, mfa_secret) VALUES (?, ?, ?)',
+                                     (username, 'LDAP_USER', secret))
                 db.commit()
                 return True, "MFA updated."
             except Exception as e:
-                logger.error(f"Error updating MFA secret: {e}")
+                logger.error(f"Error updating MFA secret for {username}: {e}")
                 return False, str(e)
 
 def is_mfa_enabled(username, conn=None):

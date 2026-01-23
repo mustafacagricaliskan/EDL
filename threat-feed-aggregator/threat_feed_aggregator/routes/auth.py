@@ -132,11 +132,20 @@ def enable_mfa():
     data = request.get_json()
     secret = data.get('secret')
     code = data.get('code')
+    username = session.get('username')
+    
+    logger.info(f"Attempting to enable MFA for user: {username}")
     
     if verify_totp(secret, code):
-        update_user_mfa_secret(session['username'], secret)
-        return jsonify({'status': 'success', 'message': 'MFA Enabled Successfully'})
+        success, msg = update_user_mfa_secret(username, secret)
+        if success:
+            logger.info(f"MFA successfully enabled for user: {username}")
+            return jsonify({'status': 'success', 'message': 'MFA Enabled Successfully'})
+        else:
+            logger.error(f"Failed to update MFA secret for user {username}: {msg}")
+            return jsonify({'status': 'error', 'message': f'Database error: {msg}'})
     else:
+        logger.warning(f"MFA enablement failed for user {username}: Invalid Code")
         return jsonify({'status': 'error', 'message': 'Invalid Code'})
 
 @bp_auth.route('/mfa/disable', methods=['POST'])

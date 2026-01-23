@@ -35,8 +35,18 @@ def generate_qr_code(username, secret, issuer_name="Threat Feed Aggregator"):
 def verify_totp(secret, code):
     """Verifies a TOTP code against the secret."""
     if not secret: return False
-    totp = pyotp.TOTP(secret)
-    return totp.verify(code)
+    try:
+        totp = pyotp.TOTP(secret)
+        # valid_window=1 allows for 30s before/after the current time
+        result = totp.verify(code, valid_window=1)
+        if result:
+            logger.info("TOTP verification successful.")
+        else:
+            logger.warning("TOTP verification failed: Invalid Code.")
+        return result
+    except Exception as e:
+        logger.error(f"Error during TOTP verification: {e}")
+        return False
 
 # --- End MFA Helpers ---
 
@@ -170,6 +180,24 @@ def _check_ldap_credentials(username, password):
                         profile_data = next((p for p in all_profiles if p['id'] == profile_id), None)
                         import json
                         permissions = json.loads(profile_data['permissions']) if profile_data else {}
+
+                        # --- NEW: Sync LDAP user to local users table for MFA support ---
+                        try:
+                            from .database.connection import db_transaction, DB_WRITE_LOCK, DB_TYPE
+                            with DB_WRITE_LOCK:
+                                with db_transaction() as db:
+                                    if DB_TYPE == 'postgres':
+                                        db.execute('''
+                                            INSERT INTO users (username, password_hash, profile_id)
+                                            VALUES (%s, %s, %s)
+                                            ON CONFLICT (username) DO UPDATE SET profile_id = EXCLUDED.profile_id
+                                        ''', (username, 'LDAP_USER', profile_id))
+                                    else:
+                                        db.execute('INSERT OR REPLACE INTO users (username, password_hash, profile_id) VALUES (?, ?, ?)',
+                                                    (username, 'LDAP_USER', profile_id))
+                        except Exception as sync_e:
+                            logger.error(f"Failed to sync LDAP user to local DB: {sync_e}")
+                        # --- End Sync ---
 
                         conn.unbind()
                         return True, "LDAP Login Successful.", {

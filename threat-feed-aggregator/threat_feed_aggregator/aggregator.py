@@ -307,8 +307,12 @@ class FeedAggregator:
                     "last_updated": datetime.now(UTC).isoformat()
                 }
             else:
-                await loop.run_in_executor(None, log_job_end, job_id, "warning", 0, "No data fetched", self.db_conn)
-                job_service.update_job_status(name, "Completed", "No data fetched.")
+                msg = "No data fetched"
+                # If we want to be very precise, we could pass the status from collector, 
+                # but the collector already logged the 404 warning.
+                # Let's check if the source is still in config but failing.
+                await loop.run_in_executor(None, log_job_end, job_id, "warning", 0, msg, self.db_conn)
+                job_service.update_job_status(name, "Completed", "No data fetched (Source might be offline).")
                 return {"name": name, "count": 0, "fetch_time": f"{duration:.2f} seconds", "last_updated": datetime.now(UTC).isoformat()}
 
         except Exception as e:

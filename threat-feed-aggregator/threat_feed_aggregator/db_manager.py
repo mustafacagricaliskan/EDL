@@ -59,8 +59,10 @@ from .repositories.whitelist_repo import (
     delete_whitelisted_indicators,
     get_whitelist,
     remove_whitelist_item,
+    update_whitelist_item,
     add_api_blacklist_item,
     remove_api_blacklist_item,
+    update_api_blacklist_item,
     get_api_blacklist_items
 )
 from .repositories.custom_list_repo import (

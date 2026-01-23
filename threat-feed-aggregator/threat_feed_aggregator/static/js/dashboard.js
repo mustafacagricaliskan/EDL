@@ -676,6 +676,83 @@ function uploadFile(url, file) {
 window.showImportWhitelistModal = showImportWhitelistModal;
 window.showImportBlacklistModal = showImportBlacklistModal;
 
+function showEditSafeListModal(id, currentItem, currentType, currentDesc) {
+    Swal.fire({
+        title: 'Edit Safe List Item',
+        html: `
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-bold">Item (IP/Domain/URL)</label>
+                <input type="text" id="editSafeItem" class="form-control" value="${currentItem}">
+            </div>
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-bold">Type</label>
+                <select id="editSafeType" class="form-select">
+                    <option value="ip" ${currentType === 'ip' ? 'selected' : ''}>IP</option>
+                    <option value="domain" ${currentType === 'domain' ? 'selected' : ''}>Domain</option>
+                    <option value="url" ${currentType === 'url' ? 'selected' : ''}>URL</option>
+                </select>
+            </div>
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-bold">Description</label>
+                <input type="text" id="editSafeDesc" class="form-control" value="${currentDesc}">
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Update',
+        preConfirm: () => {
+            const item = document.getElementById('editSafeItem').value;
+            const type = document.getElementById('editSafeType').value;
+            const desc = document.getElementById('editSafeDesc').value;
+            if (!item) Swal.showValidationMessage('Item cannot be empty');
+            return { id: id, item: item, type: type, description: desc };
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            submitForm('/system/whitelist/update', result.value);
+        }
+    });
+}
+
+function showEditBlockListModal(id, currentItem, currentType, currentComment) {
+    Swal.fire({
+        title: 'Edit Block List Item',
+        html: `
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-bold">Item (IP/Domain/URL)</label>
+                <input type="text" id="editBlockItem" class="form-control" value="${currentItem}">
+            </div>
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-bold">Type</label>
+                <select id="editBlockType" class="form-select">
+                    <option value="ip" ${currentType === 'ip' ? 'selected' : ''}>IP</option>
+                    <option value="domain" ${currentType === 'domain' ? 'selected' : ''}>Domain</option>
+                    <option value="url" ${currentType === 'url' ? 'selected' : ''}>URL</option>
+                </select>
+            </div>
+            <div class="mb-3 text-start">
+                <label class="form-label small fw-bold">Comment</label>
+                <input type="text" id="editBlockComment" class="form-control" value="${currentComment}">
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Update',
+        preConfirm: () => {
+            const item = document.getElementById('editBlockItem').value;
+            const type = document.getElementById('editBlockType').value;
+            const comment = document.getElementById('editBlockComment').value;
+            if (!item) Swal.showValidationMessage('Item cannot be empty');
+            return { id: id, item: item, type: type, comment: comment };
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            submitForm('/system/blacklist/update', result.value);
+        }
+    });
+}
+
+window.showEditSafeListModal = showEditSafeListModal;
+window.showEditBlockListModal = showEditBlockListModal;
+
 function submitForm(action, data) {
     const form = document.createElement('form'); form.method = 'POST'; form.action = action;
     for (const key in data) { const input = document.createElement('input'); input.type = 'hidden'; input.name = key; input.value = data[key]; form.appendChild(input); }

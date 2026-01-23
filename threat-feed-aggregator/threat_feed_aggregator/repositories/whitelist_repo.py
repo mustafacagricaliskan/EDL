@@ -7,21 +7,24 @@ from ..database.connection import DB_WRITE_LOCK, db_transaction
 logger = logging.getLogger(__name__)
 
 # --- Whitelist Functions ---
-def add_whitelist_item(item, description="", conn=None):
+def add_whitelist_item(item, item_type='ip', description="", conn=None):
     if not item:
         return False, "Item is empty."
 
     from ..utils import validate_indicator
-    is_valid, _ = validate_indicator(item)
+    is_valid, inferred_type = validate_indicator(item)
     if not is_valid:
         return False, f"'{item}' is not a valid IP, CIDR, or Domain/URL."
+    
+    if inferred_type != 'unknown':
+        item_type = inferred_type
 
     with DB_WRITE_LOCK:
         with db_transaction(conn) as db:
             try:
                 now_iso = datetime.now(UTC).isoformat()
-                db.execute('INSERT INTO whitelist (item, description, added_at) VALUES (?, ?, ?)',
-                             (item.strip(), description, now_iso))
+                db.execute('INSERT INTO whitelist (item, type, description, added_at) VALUES (?, ?, ?, ?)',
+                             (item.strip(), item_type, description, now_iso))
                 db.commit()
                 return True, "Item added to whitelist."
             except sqlite3.IntegrityError:
@@ -45,6 +48,32 @@ def remove_whitelist_item(item_id, conn=None):
             except Exception as e:
                 logger.error(f"Error removing from whitelist: {e}")
                 return False
+
+def update_whitelist_item(item_id, new_item, item_type='ip', description="", conn=None):
+    """Updates an existing whitelist item."""
+    if not new_item:
+        return False, "Item cannot be empty."
+
+    from ..utils import validate_indicator
+    is_valid, inferred_type = validate_indicator(new_item)
+    if not is_valid:
+        return False, f"'{new_item}' is not a valid IP, CIDR, or Domain/URL."
+    
+    if inferred_type != 'unknown':
+        item_type = inferred_type
+
+    with DB_WRITE_LOCK:
+        with db_transaction(conn) as db:
+            try:
+                db.execute('UPDATE whitelist SET item = ?, type = ?, description = ? WHERE id = ?',
+                           (new_item.strip(), item_type, description, item_id))
+                db.commit()
+                return True, "Item updated successfully."
+            except sqlite3.IntegrityError:
+                return False, "Item already exists in whitelist."
+            except Exception as e:
+                logger.error(f"Error updating whitelist item: {e}")
+                return False, str(e)
 
 # --- API Blacklist Functions ---
 def add_api_blacklist_item(item, item_type='ip', comment="", conn=None):
@@ -89,6 +118,33 @@ def remove_api_blacklist_item(item, conn=None):
             except Exception as e:
                 logger.error(f"Error removing from api_blacklist: {e}")
                 return False
+
+def update_api_blacklist_item(item_id, new_item, item_type='ip', comment="", conn=None):
+    """Updates an existing blacklist item."""
+    if not new_item:
+        return False, "Item cannot be empty."
+
+    from ..utils import validate_indicator
+    is_valid, inferred_type = validate_indicator(new_item)
+    if not is_valid:
+        return False, f"'{new_item}' is not a valid IP, CIDR, or Domain/URL."
+    
+    # Use inferred type if unknown or keep existing logic
+    if inferred_type != 'unknown':
+        item_type = inferred_type
+
+    with DB_WRITE_LOCK:
+        with db_transaction(conn) as db:
+            try:
+                db.execute('UPDATE api_blacklist SET item = ?, type = ?, comment = ? WHERE id = ?',
+                           (new_item.strip(), item_type, comment, item_id))
+                db.commit()
+                return True, "Item updated successfully."
+            except sqlite3.IntegrityError:
+                return False, "Item already exists in blacklist."
+            except Exception as e:
+                logger.error(f"Error updating api_blacklist item: {e}")
+                return False, str(e)
 
 def delete_whitelisted_indicators(items_to_delete, conn=None):
     with DB_WRITE_LOCK:

@@ -958,17 +958,21 @@ def upload_root_ca():
 def add_whitelist():
     # Note: In app.py this was /add_whitelist
     item = request.form.get('item')
+    item_type = request.form.get('type', 'ip')
     description = request.form.get('description')
 
     if item:
         from ..utils import validate_indicator
-        is_valid, _ = validate_indicator(item)
+        is_valid, inferred_type = validate_indicator(item)
 
         if not is_valid:
             flash(f'Error: "{item}" is not a valid IP, CIDR, or Domain/URL.', 'danger')
             return redirect(url_for('dashboard.index'))
+        
+        if inferred_type and inferred_type != 'unknown':
+            item_type = inferred_type
 
-        success, message = add_whitelist_item(item, description)
+        success, message = add_whitelist_item(item, item_type, description)
         if not success:
             flash(f'Error: {message}', 'danger')
         else:
@@ -982,6 +986,27 @@ def add_whitelist():
 def remove_whitelist(item_id):
     # Note: In app.py this was /remove_whitelist/<int:item_id>
     remove_whitelist_item(item_id)
+    return redirect(url_for('dashboard.index'))
+
+@bp_system.route('/whitelist/update', methods=['POST'])
+@login_required
+def update_whitelist():
+    item_id = request.form.get('id', type=int)
+    item = request.form.get('item')
+    item_type = request.form.get('type', 'ip')
+    description = request.form.get('description')
+
+    if item_id and item:
+        success, message = update_whitelist_item(item_id, item, item_type, description)
+        if success:
+            flash(f'Safe List item updated successfully.', 'success')
+            # Trigger cleanup for the new item if it was added to DB
+            delete_whitelisted_indicators([item])
+        else:
+            flash(f'Error updating item: {message}', 'danger')
+    else:
+        flash('Invalid data for update.', 'danger')
+
     return redirect(url_for('dashboard.index'))
 
 @bp_system.route('/blacklist/add', methods=['POST'])
@@ -1020,6 +1045,27 @@ def remove_blacklist(item_val):
     # Trigger regeneration to remove the item immediately
     from ..aggregator import regenerate_edl_files
     regenerate_edl_files()
+    return redirect(url_for('dashboard.index'))
+
+@bp_system.route('/blacklist/update', methods=['POST'])
+@login_required
+def update_blacklist():
+    item_id = request.form.get('id', type=int)
+    item = request.form.get('item')
+    comment = request.form.get('comment')
+    item_type = request.form.get('type', 'ip')
+
+    if item_id and item:
+        success, message = update_api_blacklist_item(item_id, item, item_type, comment)
+        if success:
+            flash(f'Block List item updated successfully.', 'success')
+            from ..aggregator import regenerate_edl_files
+            regenerate_edl_files()
+        else:
+            flash(f'Error updating item: {message}', 'danger')
+    else:
+        flash('Invalid data for update.', 'danger')
+
     return redirect(url_for('dashboard.index'))
 
 @bp_system.route('/change_password', methods=['POST'])

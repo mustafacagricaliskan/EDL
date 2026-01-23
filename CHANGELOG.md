@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.15.1] - 2026-01-23
+
+### Added
+- **MFA for LDAP:** Enabled Two-Factor Authentication support for LDAP users by automatically syncing LDAP profiles to the local database upon first login.
+- **Safe List & Block List Editing:** Added the ability to edit existing entries in the Safe List and Block List directly from the dashboard, including type and description/comment updates.
+
+### Improved
+- **MFA Reliability:** Added a time-drift window (valid_window=1) to TOTP verification to handle slight clock discrepancies between the server and user devices.
+- **MFA Logging:** Implemented detailed logging for MFA enablement and verification attempts to aid troubleshooting.
+- **Feed Error Handling:** Enhanced 404 error detection for threat feeds, providing clearer log warnings when sources are offline.
+
 ## [1.15.0] - 2026-01-22
 
 ### Added

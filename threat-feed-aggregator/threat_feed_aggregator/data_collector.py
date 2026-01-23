@@ -32,10 +32,16 @@ def fetch_data_from_url(url, auth=None):
     try:
         proxies, _, _ = get_proxy_settings()
         response = requests.get(url, timeout=30, proxies=proxies, auth=auth)
+        if response.status_code == 404:
+            logger.warning(f"FEED NOT FOUND (404): The source at {url} is no longer available.")
+            return None
         response.raise_for_status()
         return response.text
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching data from {url}: {e}")
+        if hasattr(e.response, 'status_code') and e.response.status_code == 404:
+             logger.warning(f"FEED NOT FOUND (404): The source at {url} is no longer available.")
+        else:
+             logger.error(f"Error fetching data from {url}: {e}")
         return None
 
 async def fetch_data_from_url_async(url, session=None, auth=None):
@@ -48,13 +54,25 @@ async def fetch_data_from_url_async(url, session=None, auth=None):
 
         if session:
             async with session.get(url, timeout=30, proxy=proxy_url, auth=auth) as response:
+                if response.status == 404:
+                    logger.warning(f"FEED NOT FOUND (404): The source at {url} is no longer available.")
+                    return None
                 response.raise_for_status()
                 return await response.text()
         else:
             async with await get_async_session() as new_session:
                 async with new_session.get(url, timeout=30, proxy=proxy_url, auth=auth) as response:
+                    if response.status == 404:
+                        logger.warning(f"FEED NOT FOUND (404): The source at {url} is no longer available.")
+                        return None
                     response.raise_for_status()
                     return await response.text()
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            logger.warning(f"FEED NOT FOUND (404): The source at {url} is no longer available.")
+        else:
+            logger.error(f"HTTP Error {e.status} fetching from {url}: {e.message}")
+        return None
     except Exception as e:
         logger.error(f"Async error fetching data from {url}: {e}")
         return None

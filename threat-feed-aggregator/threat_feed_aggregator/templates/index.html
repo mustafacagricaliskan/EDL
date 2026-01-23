@@ -277,7 +277,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive" style="max-height: 180px;"><table class="table table-sm mb-0 align-middle">
-                        <tbody class="small">{% if whitelist %}{% for item in whitelist[:5] %}<tr><td class="ps-3 py-2"><code class="text-success">{{ item.item }}</code></td><td class="text-end pe-3"><a href="{{ url_for('system.remove_whitelist', item_id=item.id) }}" class="text-danger" onclick="return confirm('Remove?')"><i class="fas fa-times-circle"></i></a></td></tr>{% endfor %}{% else %}<tr><td class="text-center py-3 text-muted">Empty.</td></tr>{% endif %}</tbody>
+                        <tbody class="small">{% if whitelist %}{% for item in whitelist[:5] %}<tr><td class="ps-3 py-2"><code class="text-success">{{ item.item }}</code></td><td class="text-end pe-3"><button class="btn btn-link btn-sm text-primary p-0 me-2" onclick="showEditSafeListModal({{ item.id }}, '{{ item.item }}', '{{ item.type }}', '{{ item.description }}')"><i class="fas fa-pencil-alt"></i></button><a href="{{ url_for('system.remove_whitelist', item_id=item.id) }}" class="text-danger" onclick="return confirm('Remove?')"><i class="fas fa-times-circle"></i></a></td></tr>{% endfor %}{% else %}<tr><td class="text-center py-3 text-muted">Empty.</td></tr>{% endif %}</tbody>
                     </table></div>
                 </div>
             </div>
@@ -293,7 +293,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive" style="max-height: 180px;"><table class="table table-sm mb-0 align-middle">
-                        <tbody class="small">{% if blacklist %}{% for item in blacklist[:5] %}<tr><td class="ps-3 py-2"><code class="text-danger">{{ item.item }}</code><br><small class="text-muted" style="font-size: 0.65em;">{{ item.comment }}</small></td><td class="text-end pe-3"><a href="{{ url_for('system.remove_blacklist', item_val=item.item) }}" class="text-secondary" onclick="return confirm('Remove?')"><i class="fas fa-times-circle"></i></a></td></tr>{% endfor %}{% else %}<tr><td class="text-center py-3 text-muted">Empty.</td></tr>{% endif %}</tbody>
+                        <tbody class="small">{% if blacklist %}{% for item in blacklist[:5] %}<tr><td class="ps-3 py-2"><code class="text-danger">{{ item.item }}</code><br><small class="text-muted" style="font-size: 0.65em;">{{ item.comment }}</small></td><td class="text-end pe-3"><button class="btn btn-link btn-sm text-primary p-0 me-2" onclick="showEditBlockListModal({{ item.id }}, '{{ item.item }}', '{{ item.type }}', '{{ item.comment }}')"><i class="fas fa-pencil-alt"></i></button><a href="{{ url_for('system.remove_blacklist', item_val=item.item) }}" class="text-secondary" onclick="return confirm('Remove?')"><i class="fas fa-times-circle"></i></a></td></tr>{% endfor %}{% else %}<tr><td class="text-center py-3 text-muted">Empty.</td></tr>{% endif %}</tbody>
                     </table></div>
                 </div>
             </div>
@@ -318,6 +318,7 @@
                                     <tr>
                                         <td class="ps-4 py-2"><code class="text-success">{{ item.item }}</code><br><small class="text-muted">{{ item.description }}</small></td>
                                         <td class="text-end pe-4">
+                                            <button class="btn btn-sm btn-outline-primary me-1" onclick="showEditSafeListModal({{ item.id }}, '{{ item.item }}', '{{ item.type }}', '{{ item.description }}')"><i class="fas fa-pencil-alt"></i></button>
                                             <a href="{{ url_for('system.remove_whitelist', item_id=item.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove?')"><i class="fas fa-trash"></i></a>
                                         </td>
                                     </tr>
@@ -352,6 +353,7 @@
                                     <tr>
                                         <td class="ps-4 py-2"><code class="text-danger">{{ item.item }}</code><br><small class="text-muted">{{ item.comment }}</small></td>
                                         <td class="text-end pe-4">
+                                            <button class="btn btn-sm btn-outline-primary me-1" onclick="showEditBlockListModal({{ item.id }}, '{{ item.item }}', '{{ item.type }}', '{{ item.comment }}')"><i class="fas fa-pencil-alt"></i></button>
                                             <a href="{{ url_for('system.remove_blacklist', item_val=item.item) }}" class="btn btn-sm btn-outline-secondary" onclick="return confirm('Remove?')"><i class="fas fa-trash"></i></a>
                                         </td>
                                     </tr>
@@ -367,6 +369,7 @@
             </div>
         </div>
     </div>
+
 
     <!-- Task Activity & Schedules -->
     <div class="row g-4 mb-4">
